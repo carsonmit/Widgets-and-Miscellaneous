@@ -31,7 +31,7 @@ user_c = float(input("Finally, enter the value of c:"))
 
 DISCRIMINANT = (user_b)*(user_b)-(4)*(user_a)*(user_c) #Important constant that determines nature of solutions
 
-def QuadraticFormula(a, b, c):
+def QuadraticFormula(user_a, user_b, user_c):
     """
     This formula takes constant inputs a, b, c and evaluates the quadratic formula for the three possible cases
     A numerical, floating-point solution is generated as output
