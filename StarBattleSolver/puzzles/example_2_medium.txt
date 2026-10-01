@@ -1,0 +1,13 @@
+# Medium - logic gets stuck a few times, so the solver has to guess.
+# 10x10, 2 stars per row / column / region.
+# Each letter is the region that cell belongs to.
+BBBBBBBIII
+DBBBBFFIII
+DJJBBFFFII
+DDJEEEEAII
+DJJEEAAAAG
+DJJJEEAAAG
+HHJAAAAAAG
+HHJJCAAGGG
+HHHJCCACGG
+HHCCCCCCGG

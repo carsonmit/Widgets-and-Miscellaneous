@@ -1,0 +1,13 @@
+# Hard - needs lots of guessing and backtracking. Fun to watch!
+# 10x10, 2 stars per row / column / region.
+# Each letter is the region that cell belongs to.
+FFFFJJIIII
+FEFFJJJJII
+EEEEEJJJII
+ECCCJJJJAI
+CCCCJAJJAA
+DCCCHAAAAA
+DCCCHHHAAA
+DDDCBBHGGG
+DDDBBBHHHG
+DDDDBHHHHG
