@@ -1,0 +1,1317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Neuron Diagram Maker</title>
+<meta name="description" content="Draw neuron diagrams for causation papers and export them as TikZ (LaTeX) code or images.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Neurons">
+<meta name="theme-color" content="#ffffff">
+<style>
+  :root {
+    --bg: #f4f2ed; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b70;
+    --line: #dcd9d2; --accent: #2f5bd3; --accent-soft: #e8eefc; --danger: #b3261e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font: 15px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--ink);
+    display: flex; flex-direction: column; overflow: hidden;
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+  }
+  header {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top));
+    padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right));
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 16px; font-weight: 650; margin: 0 8px 0 0; white-space: nowrap; }
+  .sep { width: 1px; height: 26px; background: var(--line); margin: 0 4px; }
+  .spacer { flex: 1; }
+  button {
+    font: inherit; color: var(--ink); background: #fff; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; min-height: 38px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  button:hover { background: #f6f6f4; }
+  button:disabled { opacity: .35; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { background: #2a51bd; }
+  button.danger { color: var(--danger); }
+  button svg { width: 18px; height: 18px; flex: none; }
+
+  .main { flex: 1; display: flex; min-height: 0; }
+  .tools {
+    width: 104px; flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px 8px;
+    background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto;
+  }
+  .tools .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 6px 2px 0; }
+  .tool { flex-direction: column; gap: 3px; padding: 7px 3px; font-size: 12px; min-height: 62px; width: 100%; line-height: 1.15; text-align: center; }
+  .tool svg { width: 40px; height: 26px; }
+  .tool.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+  #stage { flex: 1; position: relative; min-width: 0; background: #fff; overflow: hidden; }
+  #overlay * { pointer-events: none; }
+  #overlay [data-handle] { pointer-events: auto; cursor: grab; }
+  #canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #hint {
+    position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
+    background: rgba(29,29,31,.82); color: #fff; padding: 6px 14px; border-radius: 18px;
+    font-size: 13px; pointer-events: none; max-width: calc(100% - 24px); text-align: center;
+  }
+  .zoom { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 4px; }
+  .zoom button { min-width: 40px; background: rgba(255,255,255,.95); }
+
+  .props {
+    width: 270px; flex: none; padding: 14px; overflow-y: auto;
+    background: var(--panel); border-left: 1px solid var(--line);
+  }
+  .props h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .props .row { margin-bottom: 14px; }
+  .props .row > .lbl { display: block; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
+  .props input[type=text], .props textarea {
+    width: 100%; font: 17px "Times New Roman", Times, serif; padding: 7px 9px;
+    border: 1px solid var(--line); border-radius: 7px; -webkit-user-select: text; user-select: text;
+  }
+  .props input[type=range] { width: 100%; }
+  .props p { margin: 0 0 10px; font-size: 14px; color: #3a3a3e; }
+  .props kbd { font: 12px ui-monospace, Menlo, monospace; background: #f1f0ec; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .check input { width: 18px; height: 18px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 4px; }
+  .seg button { padding: 5px 4px; min-height: 34px; font-size: 12.5px; flex: 1 1 0; min-width: fit-content; }
+  .seg button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .swatches { display: flex; gap: 6px; }
+  .swatch { width: 44px; height: 44px; border-radius: 50%; padding: 0; border: 2px solid #999; min-height: 0; }
+  .swatch.on { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .btnrow { display: flex; gap: 6px; flex-wrap: wrap; }
+  .small { font-size: 12px; color: var(--muted); }
+
+  /* dialogs */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none;
+    align-items: center; justify-content: center; padding: 16px; z-index: 10;
+  }
+  .overlay.open { display: flex; }
+  .dialog {
+    background: #fff; border-radius: 14px; width: min(720px, 100%); max-height: 100%;
+    overflow: auto; padding: 18px 20px; box-shadow: 0 10px 40px rgba(0,0,0,.25);
+  }
+  .dialog h2 { margin: 0 0 6px; font-size: 19px; }
+  .dialog p { margin: 6px 0 12px; color: #3a3a3e; }
+  .dialog code { font: 13px ui-monospace, Menlo, monospace; background: #f1f0ec; padding: 1px 4px; border-radius: 4px; }
+  .dialog textarea {
+    width: 100%; height: 260px; font: 12.5px/1.4 ui-monospace, Menlo, Consolas, monospace;
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px; resize: vertical;
+    -webkit-user-select: text; user-select: text; white-space: pre; overflow: auto;
+  }
+  .dialog .opts { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 10px 0; align-items: center; }
+  .dialog .opts label { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+  .dialog select, .dialog input[type=text] { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; background: #fff; }
+  .dialog .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 12px; }
+  .preview { background: #f4f2ed; border-radius: 10px; padding: 14px; display: flex; justify-content: center; }
+  .preview img { max-width: 100%; max-height: 300px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+  .help h3 { font-size: 15px; margin: 16px 0 4px; }
+  .help ul { margin: 4px 0; padding-left: 20px; }
+  .help li { margin: 3px 0; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px);
+    background: #1d1d1f; color: #fff; padding: 10px 18px; border-radius: 10px; font-size: 14px;
+    opacity: 0; transition: .2s; pointer-events: none; z-index: 20;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+
+  @media (max-width: 960px) {
+    header h1 { display: none; }
+    .main { display: grid; grid-template-columns: auto 1fr; grid-template-rows: 1fr auto; }
+    .tools { grid-row: 1 / span 2; }
+    .props { grid-column: 2; width: auto; border-left: 0; border-top: 1px solid var(--line); max-height: 34vh; }
+  }
+  @media (max-width: 760px) {
+    .main { display: flex; flex-direction: column; }
+    .tools { width: auto; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; padding: 6px 8px; }
+    .tools .label { display: none; }
+    .tool { width: auto; min-width: 74px; min-height: 54px; }
+    .props { width: auto; border-left: 0; border-top: 1px solid var(--line); max-height: 36vh; }
+    header h1 { display: none; }
+    .hide-narrow { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Neuron Diagram Maker</h1>
+  <button id="undoBtn" title="Undo (⌘Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span class="hide-narrow">Undo</span></button>
+  <button id="redoBtn" title="Redo (⇧⌘Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg><span class="hide-narrow">Redo</span></button>
+  <div class="sep"></div>
+  <button id="newBtn" title="Start a blank diagram">New</button>
+  <button id="openBtn" title="Open a diagram you saved earlier">Open…</button>
+  <button id="saveBtn" title="Save this diagram as a file so you can edit it later">Save…</button>
+  <input type="file" id="fileInput" accept=".json,.neuron,application/json" hidden>
+  <div class="spacer"></div>
+  <button id="helpBtn">Help</button>
+  <button id="imgBtn">Export image</button>
+  <button id="tikzBtn" class="primary">Export LaTeX</button>
+</header>
+
+<div class="main">
+  <nav class="tools" id="tools">
+    <div class="label">Tools</div>
+    <button class="tool" data-tool="select" title="Select & move (V)">
+      <svg viewBox="0 0 40 26"><path d="M14 3 L14 22 L19 17 L23 25 L26 23.5 L22 16 L28 16 Z" fill="currentColor"/></svg>Select / move</button>
+    <button class="tool" data-tool="neuron-firing" title="Add firing neuron (F)">
+      <svg viewBox="0 0 40 26"><circle cx="20" cy="13" r="10" fill="#bfbfbf" stroke="#000" stroke-width="1.4"/></svg>Firing neuron</button>
+    <button class="tool" data-tool="neuron-idle" title="Add non-firing neuron (N)">
+      <svg viewBox="0 0 40 26"><circle cx="20" cy="13" r="10" fill="#fff" stroke="#000" stroke-width="1.4"/></svg>Non-firing neuron</button>
+    <button class="tool" data-tool="stim" title="Draw stimulatory arrow (A)">
+      <svg viewBox="0 0 40 26"><path d="M4 13 H30" stroke="currentColor" stroke-width="1.8"/><path d="M37 13 L28 8.5 L30.5 13 L28 17.5 Z" fill="currentColor"/></svg>Stimulates</button>
+    <button class="tool" data-tool="inhib" title="Draw inhibitory link (I)">
+      <svg viewBox="0 0 40 26"><path d="M4 13 H32" stroke="currentColor" stroke-width="1.8"/><circle cx="32" cy="13" r="4" fill="currentColor"/></svg>Inhibits</button>
+    <button class="tool" data-tool="line" title="Draw plain line (L)">
+      <svg viewBox="0 0 40 26"><path d="M4 13 H36" stroke="currentColor" stroke-width="1.8"/></svg>Plain line</button>
+    <button class="tool" data-tool="text" title="Add text label (T)">
+      <svg viewBox="0 0 40 26"><text x="20" y="20" text-anchor="middle" font-family="Times New Roman, serif" font-style="italic" font-size="20" fill="currentColor">t₁</text></svg>Text</button>
+  </nav>
+
+  <div id="stage">
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet">
+      <defs>
+        <pattern id="gridPat" width="20" height="20" patternUnits="userSpaceOnUse">
+          <circle cx="0" cy="0" r="1.1" fill="#cfcac0"/>
+        </pattern>
+      </defs>
+      <rect id="gridRect" fill="url(#gridPat)"/>
+      <g id="content"></g>
+      <g id="overlay"></g>
+    </svg>
+    <div id="hint"></div>
+    <div class="zoom">
+      <button id="zoomOut" title="Zoom out">−</button>
+      <button id="zoomFit" title="Fit diagram on screen">Fit</button>
+      <button id="zoomIn" title="Zoom in">+</button>
+    </div>
+  </div>
+
+  <aside class="props" id="props"></aside>
+</div>
+
+<!-- LaTeX export -->
+<div class="overlay" id="tikzDlg">
+  <div class="dialog">
+    <h2>Export as LaTeX (TikZ)</h2>
+    <p>Copy this and paste it into your <code>.tex</code> file exactly where the diagram should appear.
+      Your document needs the line <code>\usepackage{tikz}</code> once, in the preamble (the part above <code>\begin{document}</code>). Nothing else is required.</p>
+    <div class="opts">
+      <label>Layout
+        <select id="tzWrap">
+          <option value="center">Centered on the page</option>
+          <option value="figure">Numbered figure with caption</option>
+          <option value="bare">Just the picture</option>
+          <option value="document">Complete test document</option>
+        </select>
+      </label>
+      <label>Size
+        <select id="tzScale">
+          <option value="0.6">60%</option><option value="0.75">75%</option>
+          <option value="0.9">90%</option><option value="1" selected>100%</option>
+          <option value="1.25">125%</option><option value="1.5">150%</option>
+        </select>
+      </label>
+      <label id="tzCapWrap" style="display:none">Caption <input type="text" id="tzCaption" value="" placeholder="e.g. Early preemption" size="22"></label>
+    </div>
+    <textarea id="tzOut" readonly spellcheck="false"></textarea>
+    <p class="small">“Size” scales the drawing; labels stay the size of your document’s text, so long labels may not fit inside small neurons. “Complete test document” gives a whole file you can paste into a blank Overleaf project to check the picture compiles.</p>
+    <div class="actions">
+      <button id="tzDownload">Download .tex</button>
+      <button id="tzClose">Close</button>
+      <button id="tzCopy" class="primary">Copy code</button>
+    </div>
+  </div>
+</div>
+
+<!-- Image export -->
+<div class="overlay" id="imgDlg">
+  <div class="dialog">
+    <h2>Export as an image</h2>
+    <p>For Word or Google Docs: press <b>Copy image</b> and then paste into your document, or download the file and use <b>Insert → Picture/Image</b>. You can resize it in the document by dragging a corner.</p>
+    <div class="preview"><img id="imgPreview" alt="Preview of the exported diagram"></div>
+    <div class="opts">
+      <label>Format
+        <select id="imgFormat">
+          <option value="png">PNG (Word, Google Docs)</option>
+          <option value="svg">SVG (vector, for designers)</option>
+        </select>
+      </label>
+      <label>Quality
+        <select id="imgDpi">
+          <option value="150">Standard</option>
+          <option value="300" selected>High (print)</option>
+          <option value="600">Very high</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="imgTransparent"> Transparent background</label>
+    </div>
+    <div class="actions">
+      <button id="imgClose">Close</button>
+      <button id="imgShare" style="display:none">Share / Save to Photos…</button>
+      <button id="imgDownload">Download</button>
+      <button id="imgCopy" class="primary">Copy image</button>
+    </div>
+  </div>
+</div>
+
+<!-- Help -->
+<div class="overlay" id="helpDlg">
+  <div class="dialog help">
+    <h2>How to use Neuron Diagram Maker</h2>
+    <h3>Drawing</h3>
+    <ul>
+      <li><b>Neurons:</b> pick <i>Firing neuron</i> (gray) or <i>Non-firing neuron</i> (white), then tap or click on the canvas.</li>
+      <li><b>Connections:</b> pick <i>Stimulates</i> (arrow), <i>Inhibits</i> (line ending in a dot) or <i>Plain line</i>, then drag from one neuron to another. You can also tap the first neuron, then tap the second.</li>
+      <li><b>Text:</b> pick <i>Text</i> and tap where it should go (handy for time labels like t_1, t_2).</li>
+      <li><b>Moving:</b> drag any neuron or text. Drag a connection sideways to curve it.</li>
+      <li><b>Moving around the page:</b> drag on empty space. Pinch (iPad / trackpad) or use the + / − buttons to zoom.</li>
+    </ul>
+    <h3>Changing how things look</h3>
+    <ul>
+      <li>Select something (with the <i>Select</i> tool, or just tap it) and use the panel on the right: label, shading, border (e.g. thick for a “stubborn” neuron), size, arrow type, dashed lines, curve…</li>
+      <li>To change several neurons at once, hold <kbd>Shift</kbd> while clicking them, or use <i>Select all</i>.</li>
+      <li><b>Labels:</b> type <code>c</code>, <code>e</code>, <code>c_1</code> (subscript), <code>c'</code>, <code>\alpha</code>… They are set in italics like LaTeX math. Untick “math” for ordinary text.</li>
+    </ul>
+    <h3>Getting it into your paper</h3>
+    <ul>
+      <li><b>LaTeX:</b> <i>Export LaTeX</i> → <i>Copy code</i> → paste into your .tex file. Add <code>\usepackage{tikz}</code> to the preamble once.</li>
+      <li><b>Word / Google Docs:</b> <i>Export image</i> → <i>Copy image</i> → paste. Or download the PNG and insert it.</li>
+    </ul>
+    <h3>Saving</h3>
+    <ul>
+      <li>Your current diagram is remembered automatically in this browser.</li>
+      <li>To keep several diagrams, use <i>Save…</i> to store each as a file, and <i>Open…</i> to edit it later.</li>
+    </ul>
+    <h3>Keyboard shortcuts</h3>
+    <ul>
+      <li><kbd>V</kbd> select · <kbd>F</kbd> firing neuron · <kbd>N</kbd> non-firing neuron · <kbd>A</kbd> stimulates · <kbd>I</kbd> inhibits · <kbd>L</kbd> line · <kbd>T</kbd> text</li>
+      <li><kbd>Delete</kbd> remove selection · <kbd>⌘Z</kbd> undo · <kbd>⇧⌘Z</kbd> redo · <kbd>⌘A</kbd> select all · <kbd>⌘D</kbd> duplicate · arrow keys nudge</li>
+    </ul>
+    <div class="actions">
+      <button id="exampleBtn">Load an example diagram</button>
+      <button id="helpClose" class="primary">Got it</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+/* ================================================================
+   Units. Diagram coordinates are "px" at 100% zoom; 40px = 1 cm.
+   Line widths and font sizes are specified in TeX points (pt) so
+   the preview, the image and the TikZ output all match.
+   ================================================================ */
+const PX_PER_CM = 40;
+const PT = PX_PER_CM / 28.4528;           // px per TeX pt
+const GRID = 10;                          // snap step: 0.25 cm
+const LW = { normal: 0.8, thick: 2 };     // line widths in pt
+const FONT_PT = { small: 9, normal: 11, large: 14 };
+const SERIF = '"Latin Modern Roman", "CMU Serif", "Times New Roman", Times, serif';
+const FILLS = {
+  white: { name: 'White (not firing)', svg: '#ffffff', tikz: 'white' },
+  gray:  { name: 'Gray (firing)',      svg: '#bfbfbf', tikz: 'gray!50' },   // gray!50 = 75% white
+  light: { name: 'Light gray',         svg: '#dfdfdf', tikz: 'gray!25' },
+  black: { name: 'Black',              svg: '#000000', tikz: 'black' },
+};
+const STORE_KEY = 'neuron-diagram-maker/v1';
+
+/* ---------------- document state ---------------- */
+let doc = emptyDoc();
+let selection = new Set();
+let tool = 'select';
+let pendingFrom = null;        // first neuron tapped in a connect tool
+let undoStack = [], redoStack = [];
+let view = { x: -60, y: -60, z: 1.25 };
+let snapOn = true, gridOn = true;
+
+function emptyDoc() { return { version: 1, neurons: [], edges: [], texts: [] }; }
+function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 9); }
+const kindOf = id => id[0] === 'n' ? 'neuron' : id[0] === 'e' ? 'edge' : 'text';
+const getNeuron = id => doc.neurons.find(n => n.id === id);
+function getItem(id) {
+  return doc.neurons.find(o => o.id === id) || doc.edges.find(o => o.id === id) || doc.texts.find(o => o.id === id);
+}
+function newNeuron(x, y, firing) {
+  return { id: uid('n'), x, y, r: 18, fill: firing ? 'gray' : 'white', border: 'normal', label: '', math: true, labelPos: 'center' };
+}
+
+/* ---------------- small helpers ---------------- */
+const $ = id => document.getElementById(id);
+const svg = $('canvas'), contentG = $('content'), overlayG = $('overlay');
+const snap = v => snapOn ? Math.round(v / GRID) * GRID : v;
+const unit = (x, y) => { const l = Math.hypot(x, y) || 1; return { x: x / l, y: y / l }; };
+const r2 = v => Math.round(v * 100) / 100;
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ================================================================
+   Geometry of a connection (shared by screen, image and TikZ)
+   ================================================================ */
+function borderHalf(n) { return (n.border === 'thick' ? LW.thick : LW.normal) * PT / 2; }
+
+function edgeGeom(e) {
+  const A = getNeuron(e.from), B = getNeuron(e.to);
+  if (!A || !B) return null;
+  const M = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+  const d = unit(B.x - A.x, B.y - A.y);
+  const nrm = { x: -d.y, y: d.x };
+  const bend = e.bend || 0;
+  const curved = Math.abs(bend) > 0.5;
+  // Quadratic Bézier control point; the curve's midpoint sits `bend` px from the straight line.
+  const C = { x: M.x + 2 * bend * nrm.x, y: M.y + 2 * bend * nrm.y };
+  const dS = curved ? unit(C.x - A.x, C.y - A.y) : d;
+  const dE = curved ? unit(B.x - C.x, B.y - C.y) : d;
+  const oA = A.r + borderHalf(A), oB = B.r + borderHalf(B);
+  const S = { x: A.x + dS.x * oA, y: A.y + dS.y * oA };
+  const T = { x: B.x - dE.x * oB, y: B.y - dE.y * oB };          // tip, on B's outline
+  const w = LW[e.width || 'normal'] * PT;
+  const p = { x: -dE.y, y: dE.x };
+  let E = T, head = null;
+  if (e.kind === 'stim') {
+    const L = 6 * PT + 1.6 * w, H = 0.42 * L;
+    const back = { x: T.x - dE.x * L, y: T.y - dE.y * L };
+    const notch = { x: T.x - dE.x * L * 0.72, y: T.y - dE.y * L * 0.72 };
+    head = { type: 'poly', pts: [T, { x: back.x + p.x * H, y: back.y + p.y * H }, notch, { x: back.x - p.x * H, y: back.y - p.y * H }] };
+    E = { x: T.x - dE.x * L * 0.65, y: T.y - dE.y * L * 0.65 };
+  } else if (e.kind === 'inhib') {
+    const R = 2.4 * PT + 0.8 * w;
+    const c = { x: T.x - dE.x * R, y: T.y - dE.y * R };
+    head = { type: 'dot', c, r: R };
+    E = c;
+  }
+  return { S, C, E, curved, head, w, M, nrm, handle: { x: M.x + bend * nrm.x, y: M.y + bend * nrm.y } };
+}
+
+function edgePathD(g) {
+  return g.curved
+    ? `M${r2(g.S.x)} ${r2(g.S.y)} Q${r2(g.C.x)} ${r2(g.C.y)} ${r2(g.E.x)} ${r2(g.E.y)}`
+    : `M${r2(g.S.x)} ${r2(g.S.y)} L${r2(g.E.x)} ${r2(g.E.y)}`;
+}
+
+/* ================================================================
+   Labels: "c_1", "e'", "\alpha" → SVG tspans that look like LaTeX math
+   ================================================================ */
+const GREEK = { alpha:'α', beta:'β', gamma:'γ', delta:'δ', epsilon:'ε', varepsilon:'ε', zeta:'ζ', eta:'η', theta:'θ',
+  iota:'ι', kappa:'κ', lambda:'λ', mu:'μ', nu:'ν', xi:'ξ', pi:'π', rho:'ρ', sigma:'σ', tau:'τ', upsilon:'υ', phi:'φ',
+  varphi:'φ', chi:'χ', psi:'ψ', omega:'ω', Gamma:'Γ', Delta:'Δ', Theta:'Θ', Lambda:'Λ', Xi:'Ξ', Pi:'Π', Sigma:'Σ',
+  Phi:'Φ', Psi:'Ψ', Omega:'Ω', neg:'¬', wedge:'∧', vee:'∨', to:'→', rightarrow:'→', prime:'′', ast:'∗', star:'⋆' };
+
+function mathRuns(src) {
+  src = src.replace(/\\([a-zA-Z]+)\s?/g, (m, g) => GREEK[g] ?? m).replace(/'/g, '′');
+  const out = []; let i = 0;
+  while (i < src.length) {
+    const ch = src[i];
+    if ((ch === '_' || ch === '^') && i + 1 < src.length) {
+      let t, j = i + 1;
+      if (src[j] === '{') { const k = src.indexOf('}', j); t = k < 0 ? src.slice(j + 1) : src.slice(j + 1, k); i = k < 0 ? src.length : k + 1; }
+      else { t = src[j]; i = j + 1; }
+      out.push({ t, lvl: ch === '_' ? -1 : 1 });
+    } else if (ch === '{' || ch === '}' || ch === '$') { i++; }
+    else { out.push({ t: ch, lvl: 0 }); i++; }
+  }
+  return out;
+}
+
+// Returns the inner markup of a <text> element.
+function labelInner(text, math, fontPx) {
+  if (!math) return esc(text);
+  let html = '', shift = 0;
+  for (const run of mathRuns(text)) {
+    const target = run.lvl === -1 ? 0.28 * fontPx : run.lvl === 1 ? -0.42 * fontPx : 0;
+    const dy = target - shift; shift = target;
+    const size = run.lvl ? ` font-size="${r2(fontPx * 0.7)}"` : '';
+    // Letters italic, digits & symbols upright — as in LaTeX math mode.
+    const parts = run.t.match(/[A-Za-z\u03b1-\u03c9]+|[^A-Za-z\u03b1-\u03c9]+/g) || [];
+    parts.forEach((p, k) => {
+      const ital = /[A-Za-z\u03b1-\u03c9]/.test(p) ? ' font-style="italic"' : '';
+      const dyA = k === 0 && dy ? ` dy="${r2(dy)}"` : '';
+      html += `<tspan${dyA}${size}${ital}>${esc(p)}</tspan>`;
+    });
+  }
+  return html;
+}
+
+function labelAnchor(n) {
+  const gap = 3 * PT, o = n.r + borderHalf(n) + gap;
+  switch (n.labelPos) {
+    case 'above': return { x: n.x, y: n.y - o, anchor: 'middle', dy: '-0.25em', tz: 'south', tx: n.x, ty: n.y - o + gap * 0.6 };
+    case 'below': return { x: n.x, y: n.y + o, anchor: 'middle', dy: '0.8em', tz: 'north', tx: n.x, ty: n.y + o - gap * 0.6 };
+    case 'left':  return { x: n.x - o, y: n.y, anchor: 'end', dy: '0.3em', tz: 'east', tx: n.x - o + gap * 0.6, ty: n.y };
+    case 'right': return { x: n.x + o, y: n.y, anchor: 'start', dy: '0.3em', tz: 'west', tx: n.x + o - gap * 0.6, ty: n.y };
+    default:      return { x: n.x, y: n.y, anchor: 'middle', dy: '0.3em', tz: null, tx: n.x, ty: n.y };
+  }
+}
+
+/* ================================================================
+   SVG rendering (screen and export share these)
+   ================================================================ */
+function neuronSVG(n) {
+  const lw = (n.border === 'thick' ? LW.thick : LW.normal) * PT;
+  const fill = (FILLS[n.fill] || FILLS.white).svg;
+  const dash = n.border === 'dashed' ? ` stroke-dasharray="${r2(3 * PT)} ${r2(3 * PT)}"` : '';
+  let s = `<g data-id="${n.id}">`;
+  s += `<circle cx="${r2(n.x)}" cy="${r2(n.y)}" r="${r2(n.r)}" fill="${fill}" stroke="#000" stroke-width="${r2(lw)}"${dash}/>`;
+  if (n.border === 'double') s += `<circle cx="${r2(n.x)}" cy="${r2(n.y)}" r="${r2(Math.max(2, n.r - 2.5 * PT))}" fill="none" stroke="#000" stroke-width="${r2(lw)}"/>`;
+  if (n.label) {
+    const a = labelAnchor(n), fpx = FONT_PT.normal * PT;
+    const color = n.fill === 'black' && n.labelPos === 'center' ? '#fff' : '#000';
+    s += `<text x="${r2(a.x)}" y="${r2(a.y)}" dy="${a.dy}" text-anchor="${a.anchor}" font-family='${SERIF}' font-size="${r2(fpx)}" fill="${color}">${labelInner(n.label, n.math, fpx)}</text>`;
+  }
+  return s + '</g>';
+}
+
+function edgeSVG(e, forExport) {
+  const g = edgeGeom(e); if (!g) return '';
+  const d = edgePathD(g);
+  let dash = '';
+  if (e.style === 'dashed') dash = ` stroke-dasharray="${r2(3 * PT)} ${r2(3 * PT)}"`;
+  if (e.style === 'dotted') dash = ` stroke-dasharray="${r2(g.w)} ${r2(2 * PT)}"`;
+  let s = `<g data-id="${e.id}">`;
+  if (!forExport) s += `<path d="${d}" fill="none" stroke="rgba(0,0,0,0)" stroke-width="18" stroke-linecap="round"/>`;
+  s += `<path d="${d}" fill="none" stroke="#000" stroke-width="${r2(g.w)}"${dash}/>`;
+  if (g.head && g.head.type === 'poly') s += `<path d="M${g.head.pts.map(p => r2(p.x) + ' ' + r2(p.y)).join(' L')} Z" fill="#000"/>`;
+  if (g.head && g.head.type === 'dot') s += `<circle cx="${r2(g.head.c.x)}" cy="${r2(g.head.c.y)}" r="${r2(g.head.r)}" fill="#000"/>`;
+  return s + '</g>';
+}
+
+function textSVG(t) {
+  const fpx = (FONT_PT[t.size] || FONT_PT.normal) * PT;
+  let s = `<g data-id="${t.id}">`;
+  if (!t.text) s += `<rect x="${t.x - 10}" y="${t.y - 8}" width="20" height="16" fill="none" stroke="#bbb" stroke-dasharray="3 3"/>`;
+  s += `<text x="${r2(t.x)}" y="${r2(t.y)}" dy="0.3em" text-anchor="middle" font-family='${SERIF}' font-size="${r2(fpx)}" fill="#000">${labelInner(t.text, t.math, fpx)}</text>`;
+  return s + '</g>';
+}
+
+function contentSVG(forExport) {
+  return doc.edges.map(e => edgeSVG(e, forExport)).join('') +
+         doc.neurons.map(neuronSVG).join('') +
+         doc.texts.filter(t => !forExport || t.text).map(textSVG).join('');
+}
+
+let rubber = null; // {from:{x,y}, to:{x,y}} while dragging a new connection
+
+function render() {
+  contentG.innerHTML = contentSVG(false);
+  renderOverlay();
+  updateButtons();
+  updateHint();
+}
+
+function renderOverlay() {
+  const z = view.z;
+  let s = '';
+  for (const id of selection) {
+    const k = kindOf(id), it = getItem(id);
+    if (!it) continue;
+    if (k === 'neuron') {
+      s += `<circle cx="${it.x}" cy="${it.y}" r="${it.r + 6 / z + 2}" fill="none" stroke="#2f5bd3" stroke-width="${2 / z}" stroke-dasharray="${5 / z} ${4 / z}"/>`;
+    } else if (k === 'edge') {
+      const g = edgeGeom(it); if (!g) continue;
+      s += `<path d="${edgePathD(g)}" fill="none" stroke="#2f5bd3" stroke-opacity=".35" stroke-width="${g.w + 7 / z}" stroke-linecap="round" pointer-events="none"/>`;
+      if (selection.size === 1)
+        s += `<circle data-handle="${it.id}" cx="${g.handle.x}" cy="${g.handle.y}" r="${8 / z}" fill="#fff" stroke="#2f5bd3" stroke-width="${2 / z}"><title>Drag to curve</title></circle>`;
+    } else {
+      const el = contentG.querySelector(`[data-id="${id}"] text`);
+      if (el) {
+        const b = el.getBBox(), p = 4 / z;
+        s += `<rect x="${b.x - p}" y="${b.y - p}" width="${b.width + 2 * p}" height="${b.height + 2 * p}" fill="none" stroke="#2f5bd3" stroke-width="${2 / z}" stroke-dasharray="${5 / z} ${4 / z}" rx="${3 / z}"/>`;
+      }
+    }
+  }
+  if (pendingFrom) {
+    const n = getNeuron(pendingFrom);
+    if (n) s += `<circle cx="${n.x}" cy="${n.y}" r="${n.r + 5 / z + 2}" fill="none" stroke="#2f5bd3" stroke-width="${3 / z}"/>`;
+  }
+  if (rubber) {
+    s += `<line x1="${rubber.from.x}" y1="${rubber.from.y}" x2="${rubber.to.x}" y2="${rubber.to.y}" stroke="#2f5bd3" stroke-width="${2 / z}" stroke-dasharray="${6 / z} ${4 / z}"/>`;
+  }
+  overlayG.innerHTML = s;
+}
+
+/* ================================================================
+   View: pan & zoom
+   ================================================================ */
+function applyView() {
+  const w = svg.clientWidth || 800, h = svg.clientHeight || 600;
+  const vw = w / view.z, vh = h / view.z;
+  svg.setAttribute('viewBox', `${view.x} ${view.y} ${vw} ${vh}`);
+  const gr = $('gridRect');
+  gr.setAttribute('x', view.x); gr.setAttribute('y', view.y);
+  gr.setAttribute('width', vw); gr.setAttribute('height', vh);
+  gr.style.display = gridOn ? '' : 'none';
+  renderOverlay();
+}
+function toDiagram(clientX, clientY) {
+  const r = svg.getBoundingClientRect();
+  return { x: view.x + (clientX - r.left) / view.z, y: view.y + (clientY - r.top) / view.z };
+}
+function zoomAt(clientX, clientY, factor) {
+  const p = toDiagram(clientX, clientY), r = svg.getBoundingClientRect();
+  view.z = Math.min(6, Math.max(0.25, view.z * factor));
+  view.x = p.x - (clientX - r.left) / view.z;
+  view.y = p.y - (clientY - r.top) / view.z;
+  applyView();
+}
+function zoomCenter(factor) {
+  const r = svg.getBoundingClientRect();
+  zoomAt(r.left + r.width / 2, r.top + r.height / 2, factor);
+}
+function fitView() {
+  const w = svg.clientWidth, h = svg.clientHeight;
+  if (!doc.neurons.length && !doc.texts.length) { view = { x: -60, y: -60, z: 1.25 }; applyView(); return; }
+  const b = contentG.getBBox(), pad = 50;
+  view.z = Math.min(3, Math.max(0.3, Math.min(w / (b.width + 2 * pad), h / (b.height + 2 * pad))));
+  view.x = b.x + b.width / 2 - w / 2 / view.z;
+  view.y = b.y + b.height / 2 - h / 2 / view.z;
+  applyView();
+}
+
+/* ================================================================
+   Undo / redo / persistence
+   ================================================================ */
+let editKey = null; // coalesces a burst of typing into one undo step
+function snapshot() { return JSON.stringify(doc); }
+function pushUndo(snap) {
+  undoStack.push(snap); if (undoStack.length > 200) undoStack.shift();
+  redoStack = [];
+}
+function change(fn, key) {
+  if (!key || key !== editKey) pushUndo(snapshot());
+  editKey = key || null;
+  fn();
+  afterChange();
+}
+function afterChange() { render(); save(); }
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(snapshot()); doc = JSON.parse(undoStack.pop()); editKey = null;
+  pruneSelection(); render(); renderProps(true); save();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(snapshot()); doc = JSON.parse(redoStack.pop()); editKey = null;
+  pruneSelection(); render(); renderProps(true); save();
+}
+function pruneSelection() {
+  for (const id of [...selection]) if (!getItem(id)) selection.delete(id);
+  if (pendingFrom && !getNeuron(pendingFrom)) pendingFrom = null;
+}
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ doc, snapOn, gridOn })); } catch (e) { /* storage unavailable */ }
+}
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    if (s && s.doc) { doc = sanitize(s.doc); snapOn = s.snapOn !== false; gridOn = s.gridOn !== false; return true; }
+  } catch (e) { /* ignore */ }
+  return false;
+}
+function sanitize(d) {
+  const out = emptyDoc();
+  if (!d || typeof d !== 'object') throw new Error('Not a diagram file');
+  out.neurons = (d.neurons || []).filter(n => n && n.id && isFinite(n.x) && isFinite(n.y)).map(n => ({
+    id: String(n.id), x: +n.x, y: +n.y, r: isFinite(n.r) ? +n.r : 18, fill: FILLS[n.fill] ? n.fill : 'white',
+    border: ['normal', 'thick', 'double', 'dashed'].includes(n.border) ? n.border : 'normal',
+    label: String(n.label ?? ''), math: n.math !== false,
+    labelPos: ['center', 'above', 'below', 'left', 'right'].includes(n.labelPos) ? n.labelPos : 'center' }));
+  const ids = new Set(out.neurons.map(n => n.id));
+  out.edges = (d.edges || []).filter(e => e && ids.has(e.from) && ids.has(e.to)).map(e => ({
+    id: String(e.id), from: e.from, to: e.to, kind: ['stim', 'inhib', 'line'].includes(e.kind) ? e.kind : 'stim',
+    style: ['solid', 'dashed', 'dotted'].includes(e.style) ? e.style : 'solid',
+    width: e.width === 'thick' ? 'thick' : 'normal', bend: isFinite(e.bend) ? +e.bend : 0 }));
+  out.texts = (d.texts || []).filter(t => t && isFinite(t.x) && isFinite(t.y)).map(t => ({
+    id: String(t.id), x: +t.x, y: +t.y, text: String(t.text ?? ''), math: t.math !== false,
+    size: FONT_PT[t.size] ? t.size : 'normal' }));
+  return out;
+}
+
+/* ================================================================
+   Editing operations
+   ================================================================ */
+function addEdge(from, to, kind) {
+  if (from === to) return;
+  const same = doc.edges.find(e => e.from === from && e.to === to && e.kind === kind);
+  if (same) { setSelection([same.id]); return; }
+  const reverse = doc.edges.some(e => e.from === to && e.to === from);
+  const e = { id: uid('e'), from, to, kind, style: 'solid', width: 'normal', bend: reverse ? 14 : 0 };
+  change(() => doc.edges.push(e));
+  setSelection([e.id]);
+}
+function deleteSelection() {
+  if (!selection.size) return;
+  change(() => {
+    const ids = selection;
+    doc.neurons = doc.neurons.filter(n => !ids.has(n.id));
+    const alive = new Set(doc.neurons.map(n => n.id));
+    doc.edges = doc.edges.filter(e => !ids.has(e.id) && alive.has(e.from) && alive.has(e.to));
+    doc.texts = doc.texts.filter(t => !ids.has(t.id));
+  });
+  setSelection([]);
+}
+function duplicateSelection() {
+  const ids = [...selection].filter(id => kindOf(id) !== 'edge');
+  if (!ids.length) return;
+  const map = {}, fresh = [];
+  change(() => {
+    for (const id of ids) {
+      const o = JSON.parse(JSON.stringify(getItem(id)));
+      o.id = uid(id[0]); o.x += 40; o.y += 40; map[id] = o.id; fresh.push(o.id);
+      (kindOf(id) === 'neuron' ? doc.neurons : doc.texts).push(o);
+    }
+    for (const e of [...doc.edges]) if (map[e.from] && map[e.to]) {
+      const c = { ...e, id: uid('e'), from: map[e.from], to: map[e.to] }; doc.edges.push(c); fresh.push(c.id);
+    }
+  });
+  setSelection(fresh);
+}
+function selectAll() {
+  setSelection([...doc.neurons, ...doc.edges, ...doc.texts].map(o => o.id));
+}
+function setSelection(ids) {
+  selection = new Set(ids); editKey = null;
+  const before = doc.texts.length;
+  doc.texts = doc.texts.filter(t => t.text || selection.has(t.id));
+  if (doc.texts.length !== before) { render(); save(); }
+  renderOverlay(); renderProps(true); updateButtons();
+}
+function setTool(t) {
+  tool = t; pendingFrom = null; rubber = null;
+  document.querySelectorAll('.tool').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
+  renderOverlay(); updateHint();
+  if (!selection.size) renderProps(true);
+}
+
+/* ================================================================
+   Pointer input (mouse, trackpad, Apple Pencil, fingers)
+   ================================================================ */
+const pointers = new Map();
+let action = null;
+let lastTap = { id: null, time: 0 };
+
+function hitAt(target) {
+  const h = target.closest && target.closest('[data-handle]');
+  if (h) return { handle: h.dataset.handle };
+  const g = target.closest && target.closest('[data-id]');
+  return g ? { id: g.dataset.id } : {};
+}
+
+svg.addEventListener('pointerdown', ev => {
+  if (ev.button !== undefined && ev.button > 0 && ev.pointerType === 'mouse') return;
+  ev.preventDefault();
+  try { svg.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+  pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+
+  if (pointers.size === 2) {               // second finger → pinch-zoom, cancel what the first finger did
+    if (action && action.snap && action.snap !== snapshot()) { doc = JSON.parse(action.snap); pruneSelection(); render(); }
+    rubber = null;
+    const [a, b] = [...pointers.values()];
+    action = { type: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y), m0: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, v0: { ...view } };
+    return;
+  }
+  if (pointers.size > 2) return;
+
+  const p = toDiagram(ev.clientX, ev.clientY);
+  const hit = hitAt(ev.target);
+  const multi = ev.shiftKey || ev.metaKey || ev.ctrlKey;
+  const start = { cx: ev.clientX, cy: ev.clientY, p };
+
+  // Curve handle of a selected connection
+  if (!hit.id) lastTap = { id: null, time: 0 };
+  if (hit.handle) {
+    action = { type: 'bend', id: hit.handle, snap: snapshot(), start };
+    return;
+  }
+
+  const isConnectTool = tool === 'stim' || tool === 'inhib' || tool === 'line';
+
+  if (hit.id) {
+    const k = kindOf(hit.id);
+    // double-tap a neuron or text → jump to its label box
+    const now = Date.now();
+    if (lastTap.id === hit.id && now - lastTap.time < 380 && k !== 'edge') {
+      lastTap = { id: null, time: 0 };
+      setSelection([hit.id]); focusLabel(); return;
+    }
+    lastTap = { id: hit.id, time: now };
+
+    if (isConnectTool && k === 'neuron') {
+      lastTap = { id: null, time: 0 };
+      if (pendingFrom && pendingFrom !== hit.id) { const f = pendingFrom; pendingFrom = null; addEdge(f, hit.id, tool); return; }
+      const n = getNeuron(hit.id);
+      action = { type: 'connect', from: hit.id, start };
+      rubber = { from: { x: n.x, y: n.y }, to: p };
+      renderOverlay();
+      return;
+    }
+    if (multi) {
+      const s = new Set(selection); s.has(hit.id) ? s.delete(hit.id) : s.add(hit.id); setSelection([...s]);
+    } else if (!selection.has(hit.id)) setSelection([hit.id]);
+
+    if (k === 'edge') {
+      if (selection.size === 1) action = { type: 'bend', id: hit.id, snap: snapshot(), start, threshold: true };
+      return;
+    }
+    const movers = [...selection].filter(id => kindOf(id) !== 'edge').map(id => { const o = getItem(id); return { o, x: o.x, y: o.y }; });
+    action = { type: 'move', movers, snap: snapshot(), start };
+    return;
+  }
+
+  // Empty canvas
+  if (tool === 'neuron-firing' || tool === 'neuron-idle') {
+    const snapBefore = snapshot();
+    const n = newNeuron(snap(p.x), snap(p.y), tool === 'neuron-firing');
+    doc.neurons.push(n);
+    selection = new Set([n.id]);
+    render(); renderProps(true);
+    action = { type: 'move', movers: [{ o: n, x: n.x, y: n.y }], snap: snapBefore, start, created: true };
+    return;
+  }
+  if (tool === 'text') {
+    const snapBefore = snapshot();
+    const t = { id: uid('t'), x: snap(p.x), y: snap(p.y), text: '', math: true, size: 'normal' };
+    doc.texts.push(t);
+    selection = new Set([t.id]);
+    render(); renderProps(true);
+    action = { type: 'move', movers: [{ o: t, x: t.x, y: t.y }], snap: snapBefore, start, created: true, focus: true };
+    return;
+  }
+  pendingFrom = null;
+  if (!multi && selection.size) setSelection([]);
+  action = { type: 'pan', start, v0: { ...view } };
+  renderOverlay();
+});
+
+svg.addEventListener('pointermove', ev => {
+  if (!pointers.has(ev.pointerId)) return;
+  pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (!action) return;
+  ev.preventDefault();
+
+  if (action.type === 'pinch') {
+    const pts = [...pointers.values()]; if (pts.length < 2) return;
+    const [a, b] = pts, d = Math.hypot(a.x - b.x, a.y - b.y), m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const r = svg.getBoundingClientRect(), v0 = action.v0;
+    const P0 = { x: v0.x + (action.m0.x - r.left) / v0.z, y: v0.y + (action.m0.y - r.top) / v0.z };
+    view.z = Math.min(6, Math.max(0.25, v0.z * d / (action.d0 || 1)));
+    view.x = P0.x - (m.x - r.left) / view.z; view.y = P0.y - (m.y - r.top) / view.z;
+    applyView(); return;
+  }
+
+  const dxs = ev.clientX - action.start.cx, dys = ev.clientY - action.start.cy;
+  const movedEnough = Math.hypot(dxs, dys) > 4;
+  if (!action.moved && !movedEnough) return;
+  action.moved = true;
+  const p = toDiagram(ev.clientX, ev.clientY);
+
+  if (action.type === 'pan') {
+    view.x = action.v0.x - dxs / view.z; view.y = action.v0.y - dys / view.z; applyView();
+  } else if (action.type === 'move') {
+    let dx = p.x - action.start.p.x, dy = p.y - action.start.p.y;
+    if (snapOn) { dx = Math.round(dx / GRID) * GRID; dy = Math.round(dy / GRID) * GRID; }
+    for (const m of action.movers) { m.o.x = m.x + dx; m.o.y = m.y + dy; }
+    render();
+  } else if (action.type === 'bend') {
+    const e = getItem(action.id), g = e && edgeGeom(e); if (!g) return;
+    let b = (p.x - g.M.x) * g.nrm.x + (p.y - g.M.y) * g.nrm.y;
+    if (Math.abs(b) < 6) b = 0;
+    e.bend = Math.round(b);
+    render();
+  } else if (action.type === 'connect') {
+    rubber.to = p;
+    const over = hitAt(document.elementFromPoint(ev.clientX, ev.clientY) || svg);
+    if (over.id && kindOf(over.id) === 'neuron' && over.id !== action.from) {
+      const n = getNeuron(over.id); rubber.to = { x: n.x, y: n.y };
+    }
+    renderOverlay();
+  }
+});
+
+function endPointer(ev) {
+  if (!pointers.has(ev.pointerId)) return;
+  pointers.delete(ev.pointerId);
+  const a = action;
+  if (!a) return;
+  if (a.type === 'pinch') { if (pointers.size === 0) action = null; return; }
+  action = null;
+
+  if (a.type === 'move' || a.type === 'bend') {
+    if (a.snap !== snapshot()) { pushUndo(a.snap); editKey = null; save(); }
+    render();
+    if (a.type === 'move' && a.focus) focusLabel();
+    if (a.type === 'bend') renderProps(true);
+  } else if (a.type === 'connect') {
+    rubber = null;
+    const over = hitAt(document.elementFromPoint(ev.clientX, ev.clientY) || svg);
+    if (over.id && kindOf(over.id) === 'neuron' && over.id !== a.from) addEdge(a.from, over.id, tool);
+    else if (!a.moved) pendingFrom = a.from;          // tap-tap mode
+    renderOverlay(); updateHint();
+  }
+}
+svg.addEventListener('pointerup', endPointer);
+svg.addEventListener('pointercancel', endPointer);
+
+svg.addEventListener('wheel', ev => {
+  ev.preventDefault();
+  if (ev.ctrlKey || ev.metaKey) zoomAt(ev.clientX, ev.clientY, Math.exp(-ev.deltaY * 0.01));
+  else { view.x += ev.deltaX / view.z; view.y += ev.deltaY / view.z; applyView(); }
+}, { passive: false });
+// Safari trackpad pinch
+let gestureZ = 1;
+svg.addEventListener('gesturestart', e => { e.preventDefault(); gestureZ = view.z; });
+svg.addEventListener('gesturechange', e => { e.preventDefault(); if (pointers.size < 2) zoomAt(e.clientX, e.clientY, gestureZ * e.scale / view.z); });
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+/* ---------------- keyboard ---------------- */
+document.addEventListener('keydown', ev => {
+  const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement && document.activeElement.tagName);
+  const mod = ev.metaKey || ev.ctrlKey;
+  if (document.querySelector('.overlay.open')) { if (ev.key === 'Escape') closeDialogs(); return; }
+  if (mod && ev.key.toLowerCase() === 'z' && !inField) { ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
+  if (mod && ev.key.toLowerCase() === 'y' && !inField) { ev.preventDefault(); redo(); return; }
+  if (inField) { if (ev.key === 'Escape' || ev.key === 'Enter') document.activeElement.blur(); return; }
+  if (mod && ev.key.toLowerCase() === 'a') { ev.preventDefault(); selectAll(); return; }
+  if (mod && ev.key.toLowerCase() === 'd') { ev.preventDefault(); duplicateSelection(); return; }
+  if (mod && ev.key.toLowerCase() === 's') { ev.preventDefault(); saveFile(); return; }
+  if (mod) return;
+  if (ev.key === 'Delete' || ev.key === 'Backspace') { ev.preventDefault(); deleteSelection(); return; }
+  if (ev.key === 'Escape') { pendingFrom = null; rubber = null; setSelection([]); setTool('select'); return; }
+  if (ev.key.startsWith('Arrow') && selection.size) {
+    ev.preventDefault();
+    const step = ev.shiftKey ? GRID * 4 : (snapOn ? GRID : 1);
+    const dx = ev.key === 'ArrowLeft' ? -step : ev.key === 'ArrowRight' ? step : 0;
+    const dy = ev.key === 'ArrowUp' ? -step : ev.key === 'ArrowDown' ? step : 0;
+    change(() => { for (const id of selection) { const o = getItem(id); if (kindOf(id) !== 'edge') { o.x += dx; o.y += dy; } } }, 'nudge');
+    return;
+  }
+  const keys = { v: 'select', f: 'neuron-firing', n: 'neuron-idle', a: 'stim', i: 'inhib', l: 'line', t: 'text' };
+  if (keys[ev.key.toLowerCase()]) setTool(keys[ev.key.toLowerCase()]);
+});
+
+/* ================================================================
+   Properties panel
+   ================================================================ */
+const propsEl = $('props');
+let propsKey = '';
+
+function seg(key, options, current) {
+  return `<div class="seg" data-key="${key}">` +
+    options.map(([v, l]) => `<button data-v="${v}" class="${String(v) === String(current) ? 'on' : ''}">${l}</button>`).join('') + '</div>';
+}
+function selectedOf(kind) { return [...selection].filter(id => kindOf(id) === kind).map(getItem).filter(Boolean); }
+const common = (arr, f) => arr.length && arr.every(o => o[f] === arr[0][f]) ? arr[0][f] : null;
+
+function renderProps(force) {
+  const key = [...selection].sort().join(',') + '|' + tool;
+  if (!force && key === propsKey) return;
+  propsKey = key;
+  const ns = selectedOf('neuron'), es = selectedOf('edge'), ts = selectedOf('text');
+  let h = '';
+
+  if (!selection.size) {
+    h += `<h2>Getting started</h2>${toolTip()}
+      <div class="row"><label class="check"><input type="checkbox" data-setting="snap" ${snapOn ? 'checked' : ''}> Snap to grid</label></div>
+      <div class="row"><label class="check"><input type="checkbox" data-setting="grid" ${gridOn ? 'checked' : ''}> Show grid dots</label></div>
+      <div class="row btnrow"><button data-act="selectall" ${doc.neurons.length ? '' : 'disabled'}>Select all</button></div>
+      <p class="small">Tap <b>Help</b> (top right) for a full guide.</p>`;
+    propsEl.innerHTML = h; return;
+  }
+
+  if (ns.length && !es.length && !ts.length) {
+    const one = ns.length === 1 ? ns[0] : null;
+    h += `<h2>${one ? 'Neuron' : ns.length + ' neurons'}</h2>`;
+    if (one) h += `<div class="row"><span class="lbl">Label</span><input type="text" data-field="label" value="${esc(one.label)}" placeholder="e.g. c, e, d_1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>`;
+    h += `<div class="row"><label class="check"><input type="checkbox" data-field="math" ${common(ns, 'math') !== false ? 'checked' : ''}> Label as math (italic)</label></div>`;
+    h += `<div class="row"><span class="lbl">Label position</span>${seg('labelPos', [['center', 'Inside'], ['above', 'Above'], ['below', 'Below'], ['left', 'Left'], ['right', 'Right']], common(ns, 'labelPos'))}</div>`;
+    h += `<div class="row"><span class="lbl">Shading</span><div class="swatches" data-key="fill">` +
+      Object.entries(FILLS).map(([k, f]) => `<button class="swatch ${common(ns, 'fill') === k ? 'on' : ''}" data-v="${k}" title="${f.name}" style="background:${f.svg}"></button>`).join('') +
+      `</div><div class="small" style="margin-top:4px">${FILLS[common(ns, 'fill')]?.name || 'Mixed'}</div></div>`;
+    h += `<div class="row"><span class="lbl">Outline</span>${seg('border', [['normal', 'Normal'], ['thick', 'Thick'], ['double', 'Double'], ['dashed', 'Dashed']], common(ns, 'border'))}
+      <div class="small" style="margin-top:4px">Thick outlines are the usual way to draw a “stubborn” neuron.</div></div>`;
+    const r = common(ns, 'r') ?? ns[0].r;
+    h += `<div class="row"><span class="lbl">Size <span id="rVal">${(r * 2 / PX_PER_CM).toFixed(2)} cm</span></span><input type="range" data-field="r" min="8" max="44" step="1" value="${r}"></div>`;
+  } else if (es.length && !ns.length && !ts.length) {
+    const one = es.length === 1 ? es[0] : null;
+    h += `<h2>${one ? 'Connection' : es.length + ' connections'}</h2>`;
+    h += `<div class="row"><span class="lbl">Type</span>${seg('kind', [['stim', 'Stimulates →'], ['inhib', 'Inhibits ⊸'], ['line', 'Plain line']], common(es, 'kind'))}</div>`;
+    h += `<div class="row"><span class="lbl">Line</span>${seg('style', [['solid', 'Solid'], ['dashed', 'Dashed'], ['dotted', 'Dotted']], common(es, 'style'))}</div>`;
+    h += `<div class="row"><span class="lbl">Thickness</span>${seg('width', [['normal', 'Normal'], ['thick', 'Thick']], common(es, 'width'))}</div>`;
+    if (one) {
+      h += `<div class="row"><span class="lbl">Curve</span><input type="range" data-field="bend" min="-90" max="90" step="1" value="${one.bend || 0}">
+        <div class="small">Tip: you can also drag the line (or its round handle) sideways.</div></div>`;
+      h += `<div class="row btnrow"><button data-act="straighten">Straighten</button><button data-act="reverse">Reverse direction</button></div>`;
+    }
+  } else if (ts.length && !ns.length && !es.length) {
+    const one = ts.length === 1 ? ts[0] : null;
+    h += `<h2>${one ? 'Text' : ts.length + ' texts'}</h2>`;
+    if (one) h += `<div class="row"><span class="lbl">Text</span><input type="text" data-field="text" value="${esc(one.text)}" placeholder="e.g. t_1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>`;
+    h += `<div class="row"><label class="check"><input type="checkbox" data-field="math" ${common(ts, 'math') !== false ? 'checked' : ''}> Format as math (italic)</label></div>`;
+    h += `<div class="row"><span class="lbl">Size</span>${seg('size', [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large']], common(ts, 'size'))}</div>`;
+  } else {
+    h += `<h2>${selection.size} items selected</h2><p>Drag any selected neuron to move them all together.</p>`;
+  }
+  h += `<div class="row btnrow">` +
+    (ns.length || ts.length ? `<button data-act="duplicate">Duplicate</button>` : '') +
+    `<button data-act="delete" class="danger">Delete</button></div>`;
+  propsEl.innerHTML = h;
+}
+
+function toolTip() {
+  return {
+    'select': '<p>Tap a neuron, connection or text to select and edit it. Drag things to move them. Drag empty space to move around.</p>',
+    'neuron-firing': '<p>Tap the canvas to add a <b>firing</b> (gray) neuron.</p>',
+    'neuron-idle': '<p>Tap the canvas to add a <b>non-firing</b> (white) neuron.</p>',
+    'stim': '<p>Drag from one neuron to another to draw a <b>stimulatory</b> arrow (or tap one neuron, then the other).</p>',
+    'inhib': '<p>Drag from one neuron to another to draw an <b>inhibitory</b> connection (or tap one neuron, then the other).</p>',
+    'line': '<p>Drag from one neuron to another to draw a plain line.</p>',
+    'text': '<p>Tap the canvas to add text, such as time labels <i>t</i><sub>1</sub>, <i>t</i><sub>2</sub>.</p>',
+  }[tool];
+}
+
+function applyToSelected(kind, field, value, key) {
+  change(() => { for (const o of selectedOf(kind)) o[field] = value; }, key);
+}
+function focusLabel() {
+  const i = propsEl.querySelector('input[type=text]');
+  if (i) { i.focus(); i.select(); }
+}
+
+propsEl.addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  const segEl = b.closest('[data-key]');
+  if (segEl) {
+    const field = segEl.dataset.key, kind = selectedOf('neuron').length ? 'neuron' : selectedOf('edge').length ? 'edge' : 'text';
+    applyToSelected(kind, field, b.dataset.v);
+    renderProps(true); return;
+  }
+  const act = b.dataset.act;
+  if (act === 'delete') deleteSelection();
+  if (act === 'duplicate') duplicateSelection();
+  if (act === 'selectall') selectAll();
+  if (act === 'straighten') { applyToSelected('edge', 'bend', 0); renderProps(true); }
+  if (act === 'reverse') { change(() => { for (const e of selectedOf('edge')) { [e.from, e.to] = [e.to, e.from]; e.bend = -(e.bend || 0); } }); }
+});
+propsEl.addEventListener('input', ev => {
+  const el = ev.target;
+  if (el.dataset.setting) return;
+  const field = el.dataset.field; if (!field) return;
+  const kind = selectedOf('neuron').length ? 'neuron' : selectedOf('edge').length ? 'edge' : 'text';
+  let v = el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : el.value;
+  applyToSelected(kind, field, v, 'prop:' + field + ':' + [...selection].join());
+  if (field === 'r') $('rVal').textContent = (v * 2 / PX_PER_CM).toFixed(2) + ' cm';
+});
+propsEl.addEventListener('change', ev => {
+  const el = ev.target;
+  if (el.dataset.setting === 'snap') { snapOn = el.checked; save(); }
+  if (el.dataset.setting === 'grid') { gridOn = el.checked; applyView(); save(); }
+  editKey = null;
+});
+propsEl.addEventListener('focusout', () => { editKey = null; });
+
+/* ================================================================
+   Header / hint / buttons
+   ================================================================ */
+function updateButtons() {
+  $('undoBtn').disabled = !undoStack.length;
+  $('redoBtn').disabled = !redoStack.length;
+}
+function updateHint() {
+  const el = $('hint');
+  let msg = '';
+  if (!doc.neurons.length && !doc.texts.length) msg = 'Choose “Firing neuron” or “Non-firing neuron” on the left, then tap the canvas.';
+  else if (pendingFrom) msg = 'Now tap the neuron it connects to.';
+  else if ((tool === 'stim' || tool === 'inhib' || tool === 'line') && doc.neurons.length < 2) msg = 'Add at least two neurons first.';
+  el.textContent = msg; el.style.display = msg ? '' : 'none';
+}
+
+document.querySelectorAll('.tool').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+$('undoBtn').onclick = undo;
+$('redoBtn').onclick = redo;
+$('zoomIn').onclick = () => zoomCenter(1.25);
+$('zoomOut').onclick = () => zoomCenter(0.8);
+$('zoomFit').onclick = fitView;
+$('newBtn').onclick = () => {
+  if (!doc.neurons.length && !doc.texts.length) return;
+  change(() => { doc = emptyDoc(); });
+  setSelection([]); fitView();
+  toast('Started a new diagram — press Undo to get the old one back.');
+};
+
+/* ---------------- save / open files ---------------- */
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function saveFile() {
+  let name = prompt('Name for this diagram file:', 'neuron-diagram');
+  if (name === null) return;
+  name = (name.trim() || 'neuron-diagram').replace(/[\\/:*?"<>|]/g, '-');
+  download(new Blob([JSON.stringify(doc, null, 1)], { type: 'application/json' }), name + '.json');
+  toast('Saved. Use “Open…” to edit it again later.');
+}
+$('saveBtn').onclick = saveFile;
+$('openBtn').onclick = () => $('fileInput').click();
+$('fileInput').onchange = async ev => {
+  const f = ev.target.files[0]; ev.target.value = '';
+  if (!f) return;
+  try {
+    const d = sanitize(JSON.parse(await f.text()));
+    change(() => { doc = d; });
+    setSelection([]); fitView(); toast('Opened ' + f.name);
+  } catch (e) { alert('Sorry, that file could not be opened. Choose a .json file saved from Neuron Diagram Maker.'); }
+};
+
+/* ================================================================
+   Export: SVG / PNG
+   ================================================================ */
+function exportSVG(widthUnit) {
+  if (!doc.neurons.length && !doc.texts.some(t => t.text)) return null;
+  // Measure with the real fonts via a hidden copy of the export markup.
+  const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  tmp.innerHTML = contentSVG(true);
+  svg.appendChild(tmp);
+  const b = tmp.getBBox();
+  svg.removeChild(tmp);
+  const pad = 6, x = b.x - pad, y = b.y - pad, w = Math.ceil(b.width + 2 * pad), h = Math.ceil(b.height + 2 * pad);
+  const size = widthUnit === 'cm'
+    ? `width="${r2(w / PX_PER_CM)}cm" height="${r2(h / PX_PER_CM)}cm"`
+    : `width="${w}" height="${h}"`;
+  const text = `<svg xmlns="http://www.w3.org/2000/svg" ${size} viewBox="${r2(x)} ${r2(y)} ${w} ${h}">${contentSVG(true)}</svg>`;
+  return { text, w, h };
+}
+
+async function exportPNG(dpi, transparent) {
+  const s = exportSVG('px'); if (!s) return null;
+  const k = dpi / 2.54 / PX_PER_CM;
+  const url = URL.createObjectURL(new Blob([s.text], { type: 'image/svg+xml' }));
+  try {
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+    const c = document.createElement('canvas');
+    c.width = Math.round(s.w * k); c.height = Math.round(s.h * k);
+    const ctx = c.getContext('2d');
+    if (!transparent) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); }
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+    return await setPngDpi(blob, dpi);
+  } finally { URL.revokeObjectURL(url); }
+}
+
+// Write a pHYs chunk so Word inserts the picture at its real size.
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(bytes) { let c = 0xffffffff; for (const b of bytes) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+async function setPngDpi(blob, dpi) {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  const dv = new DataView(buf.buffer);
+  let off = 8, insertAt = 33;
+  while (off < buf.length) {                       // drop any existing pHYs
+    const len = dv.getUint32(off), type = String.fromCharCode(...buf.subarray(off + 4, off + 8));
+    if (type === 'IHDR') insertAt = off + 12 + len;
+    if (type === 'pHYs') return blob;
+    if (type === 'IDAT') break;
+    off += 12 + len;
+  }
+  const ppm = Math.round(dpi / 0.0254);
+  const chunk = new Uint8Array(21), cv = new DataView(chunk.buffer);
+  cv.setUint32(0, 9); chunk.set([0x70, 0x48, 0x59, 0x73], 4);
+  cv.setUint32(8, ppm); cv.setUint32(12, ppm); chunk[16] = 1;
+  cv.setUint32(17, crc32(chunk.subarray(4, 17)));
+  const out = new Uint8Array(buf.length + 21);
+  out.set(buf.subarray(0, insertAt)); out.set(chunk, insertAt); out.set(buf.subarray(insertAt), insertAt + 21);
+  return new Blob([out], { type: 'image/png' });
+}
+
+let previewURL = null;
+async function refreshImagePreview() {
+  const fmt = $('imgFormat').value;
+  $('imgDpi').disabled = fmt === 'svg';
+  $('imgCopy').style.display = fmt === 'svg' ? 'none' : '';
+  const s = exportSVG('px');
+  if (previewURL) URL.revokeObjectURL(previewURL);
+  previewURL = URL.createObjectURL(new Blob([s.text], { type: 'image/svg+xml' }));
+  $('imgPreview').src = previewURL;
+  $('imgPreview').style.width = Math.min(s.w * 1.4, 640) + 'px';
+}
+function canShareFiles() {
+  try { return !!(navigator.canShare && navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] })); } catch (e) { return false; }
+}
+$('imgBtn').onclick = () => {
+  if (!exportSVG('px')) { toast('Draw something first.'); return; }
+  $('imgShare').style.display = canShareFiles() ? '' : 'none';
+  openDialog('imgDlg'); refreshImagePreview();
+};
+$('imgFormat').onchange = refreshImagePreview;
+async function currentImageFile() {
+  if ($('imgFormat').value === 'svg') {
+    return new File([exportSVG('cm').text], 'neuron-diagram.svg', { type: 'image/svg+xml' });
+  }
+  const blob = await exportPNG(+$('imgDpi').value, $('imgTransparent').checked);
+  return new File([blob], 'neuron-diagram.png', { type: 'image/png' });
+}
+$('imgDownload').onclick = async () => {
+  const f = await currentImageFile(); download(f, f.name);
+};
+$('imgShare').onclick = async () => {
+  try { const f = await currentImageFile(); await navigator.share({ files: [f] }); }
+  catch (e) { if (e.name !== 'AbortError') toast('Sharing is not available here — use Download instead.'); }
+};
+$('imgCopy').onclick = async () => {
+  try {
+    // Pass a promise so Safari keeps the click as the "user gesture".
+    const p = exportPNG(+$('imgDpi').value, $('imgTransparent').checked);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': p })]);
+    toast('Image copied — now paste it into your document.');
+  } catch (e) {
+    toast('This browser would not copy images. Use Download instead.');
+  }
+};
+
+/* ================================================================
+   Export: TikZ
+   ================================================================ */
+function fmtNum(v) { const s = (Math.round(v * 1000) / 1000).toFixed(3).replace(/\.?0+$/, ''); return s === '-0' ? '0' : s; }
+function texEscape(s) {
+  return s.replace(/[\\{}$&#%_^~]/g, c => ({ '\\': '\\textbackslash{}', '~': '\\textasciitilde{}', '^': '\\textasciicircum{}' }[c] || '\\' + c));
+}
+function texLabel(text, math) { return math ? `$${text}$` : texEscape(text); }
+
+function toTikz(scale) {
+  const k = scale / PX_PER_CM;
+  const P = p => `(${fmtNum(p.x * k)},${fmtNum(-p.y * k)})`;
+  const L = len => fmtNum(len * k);
+  const out = [];
+  if (doc.edges.length) out.push('  % connections');
+  for (const e of doc.edges) {
+    const g = edgeGeom(e); if (!g) continue;
+    const opts = [`line width=${LW[e.width || 'normal']}pt`];
+    if (e.style === 'dashed') opts.push('dashed');
+    if (e.style === 'dotted') opts.push('dotted');
+    let path;
+    if (g.curved) {   // quadratic → cubic Bézier
+      const c1 = { x: g.S.x + 2 / 3 * (g.C.x - g.S.x), y: g.S.y + 2 / 3 * (g.C.y - g.S.y) };
+      const c2 = { x: g.E.x + 2 / 3 * (g.C.x - g.E.x), y: g.E.y + 2 / 3 * (g.C.y - g.E.y) };
+      path = `${P(g.S)} .. controls ${P(c1)} and ${P(c2)} .. ${P(g.E)}`;
+    } else path = `${P(g.S)} -- ${P(g.E)}`;
+    out.push(`  \\draw[${opts.join(', ')}] ${path};`);
+    if (g.head && g.head.type === 'poly') out.push(`  \\fill ${g.head.pts.map(P).join(' -- ')} -- cycle;`);
+    if (g.head && g.head.type === 'dot') out.push(`  \\fill ${P(g.head.c)} circle (${L(g.head.r)});`);
+  }
+  if (doc.neurons.length) out.push('  % neurons');
+  for (const n of doc.neurons) {
+    const lw = n.border === 'thick' ? LW.thick : LW.normal;
+    const opts = [`fill=${(FILLS[n.fill] || FILLS.white).tikz}`, `line width=${lw}pt`];
+    if (n.border === 'dashed') opts.push('dashed');
+    out.push(`  \\filldraw[${opts.join(', ')}] ${P(n)} circle (${L(n.r)});`);
+    if (n.border === 'double') out.push(`  \\draw[line width=${lw}pt] ${P(n)} circle (${L(Math.max(2, n.r - 2.5 * PT))});`);
+    if (n.label) {
+      const a = labelAnchor(n);
+      const nopts = ['inner sep=1pt', 'text height=1.5ex', 'text depth=.25ex'];
+      if (a.tz) nopts.push(`anchor=${a.tz}`);
+      if (n.fill === 'black' && n.labelPos === 'center') nopts.push('text=white');
+      out.push(`  \\node[${nopts.join(', ')}] at ${P({ x: a.tx, y: a.ty })} {${texLabel(n.label, n.math)}};`);
+    }
+  }
+  const texts = doc.texts.filter(t => t.text);
+  if (texts.length) out.push('  % text');
+  for (const t of texts) {
+    const nopts = ['inner sep=1pt', 'text height=1.5ex', 'text depth=.25ex'];
+    if (t.size === 'small') nopts.push('font=\\small');
+    if (t.size === 'large') nopts.push('font=\\large');
+    out.push(`  \\node[${nopts.join(', ')}] at ${P(t)} {${texLabel(t.text, t.math)}};`);
+  }
+  return '\\begin{tikzpicture}\n' + out.join('\n') + '\n\\end{tikzpicture}';
+}
+
+function tikzDocument() {
+  const pic = toTikz(+$('tzScale').value);
+  const wrap = $('tzWrap').value;
+  const head = '% Neuron diagram — needs \\usepackage{tikz} in the preamble\n';
+  if (wrap === 'bare') return head + pic;
+  if (wrap === 'figure') {
+    const cap = $('tzCaption').value.trim();
+    const lab = 'fig:' + (cap.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'neuron-diagram');
+    return head + '\\begin{figure}[ht]\n\\centering\n' + pic + `\n\\caption{${texEscape(cap)}}\n\\label{${lab}}\n\\end{figure}`;
+  }
+  if (wrap === 'document') {
+    return '\\documentclass{article}\n\\usepackage{tikz}\n\\begin{document}\n\n\\begin{center}\n' + pic + '\n\\end{center}\n\n\\end{document}\n';
+  }
+  return head + '\\begin{center}\n' + pic + '\n\\end{center}';
+}
+function refreshTikz() {
+  $('tzCapWrap').style.display = $('tzWrap').value === 'figure' ? '' : 'none';
+  $('tzOut').value = tikzDocument();
+}
+$('tikzBtn').onclick = () => {
+  if (!doc.neurons.length && !doc.texts.some(t => t.text)) { toast('Draw something first.'); return; }
+  refreshTikz(); openDialog('tikzDlg');
+};
+['tzWrap', 'tzScale'].forEach(id => $(id).onchange = refreshTikz);
+$('tzCaption').oninput = refreshTikz;
+$('tzCopy').onclick = async () => {
+  const ta = $('tzOut');
+  try { await navigator.clipboard.writeText(ta.value); }
+  catch (e) { ta.focus(); ta.select(); document.execCommand('copy'); }
+  toast('LaTeX code copied — paste it into your .tex file.');
+};
+$('tzDownload').onclick = () => download(new Blob([$('tzOut').value], { type: 'text/plain' }), 'neuron-diagram.tex');
+
+/* ---------------- dialogs ---------------- */
+function openDialog(id) { $(id).classList.add('open'); }
+function closeDialogs() { document.querySelectorAll('.overlay').forEach(o => o.classList.remove('open')); }
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', ev => { if (ev.target === o) closeDialogs(); }));
+['tzClose', 'imgClose', 'helpClose'].forEach(id => $(id).onclick = closeDialogs);
+$('helpBtn').onclick = () => openDialog('helpDlg');
+$('exampleBtn').onclick = () => { change(() => { doc = exampleDoc(); }); setSelection([]); closeDialogs(); fitView(); };
+
+/* ---------------- example: Lewis-style early preemption ---------------- */
+function exampleDoc() {
+  const N = (id, x, y, fill, label, labelPos = 'center') => ({ id, x, y, r: 18, fill, border: 'normal', label, math: true, labelPos });
+  const E = (id, from, to, kind) => ({ id, from, to, kind, style: 'solid', width: 'normal', bend: 0 });
+  return {
+    version: 1,
+    neurons: [N('nc', 0, 0, 'gray', 'c'), N('nd', 120, 0, 'gray', 'd'), N('ne', 240, 60, 'gray', 'e'),
+              N('na', 0, 120, 'gray', 'a'), N('nb', 120, 120, 'white', 'b')],
+    edges: [E('e1', 'nc', 'nd', 'stim'), E('e2', 'nd', 'ne', 'stim'), E('e3', 'na', 'nb', 'stim'),
+            E('e4', 'nb', 'ne', 'stim'), E('e5', 'nc', 'nb', 'inhib')],
+    texts: [],
+  };
+}
+
+/* ================================================================
+   Start up
+   ================================================================ */
+const firstVisit = !load();
+if (firstVisit) doc = exampleDoc();
+setTool('select');
+new ResizeObserver(applyView).observe(svg);
+render();
+requestAnimationFrame(() => { fitView(); renderProps(true); });
+if (firstVisit) setTimeout(() => openDialog('helpDlg'), 300);
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
