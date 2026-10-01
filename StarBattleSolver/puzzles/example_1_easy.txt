@@ -1,0 +1,13 @@
+# Easy - solved by pure logic, no guessing needed.
+# 10x10, 2 stars per row / column / region.
+# Each letter is the region that cell belongs to.
+HHHHGGGJJJ
+HCHHGGGIII
+CCHCGGGIII
+CCCCGGGIII
+CCCCGGGEII
+FFFDDGGEII
+FDDDDDEEBI
+ADADDDBEBI
+AAAABBBBBB
+AAAAAABBBB
