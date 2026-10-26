@@ -1,13 +1,13 @@
-# Hard - needs lots of guessing and backtracking. Fun to watch!
+# Hard - all four rules get stuck, so the solver has to guess (one guess at a time).
 # 10x10, 2 stars per row / column / region.
 # Each letter is the region that cell belongs to.
-FFFFJJIIII
-FEFFJJJJII
-EEEEEJJJII
-ECCCJJJJAI
-CCCCJAJJAA
-DCCCHAAAAA
-DCCCHHHAAA
-DDDCBBHGGG
-DDDBBBHHHG
-DDDDBHHHHG
+JJJJCCCCJJ
+JJJJJJJJJJ
+IJHHBBBJJJ
+IIHHHGBGGJ
+IIHHHGGGGG
+IFFFHHDGGD
+IIIFHHDDGD
+IIEFFHADDD
+IIEEEHADDD
+IIEEEAAAAD

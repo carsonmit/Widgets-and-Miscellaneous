@@ -1,4 +1,4 @@
-# Easy - solved by pure logic, no guessing needed.
+# Easy - solved by Rules 1-3 alone: counting, squeeze and quick what-ifs. No guessing.
 # 10x10, 2 stars per row / column / region.
 # Each letter is the region that cell belongs to.
 HHHHGGGJJJ

@@ -9,6 +9,9 @@ Versions 0.1.0 to 0.4.0 were reconstructed from the git history on 2026-10-26; t
 ## [Unreleased]
 
 ### Changed
+- Star Battle Solver: the example puzzles were re-graded by the new difficulty levels. The old "medium" and "hard"
+  examples both needed a guess inside a guess, so the old hard one is now `example_4_expert.txt`, and new medium and
+  hard examples were generated and checked.
 - Neuron Diagram Maker now has the look of [carsonmit.github.io](https://carsonmit.github.io): the site's colors
   (charcoal and lilac by night, cream and plum by day) and fonts, rounded pill buttons, and the site's sun/moon
   Night/Day switch, which shares its setting with the website. The drawing stays black on paper, and exports are unchanged.
@@ -19,7 +22,23 @@ Versions 0.1.0 to 0.4.0 were reconstructed from the git history on 2026-10-26; t
   Home screens show the cream version; the browser tab shows cream in a light browser and charcoal in a dark one.
 
 ### Added
+- Star Battle Solver is now a web app (`StarBattleSolver/index.html`) for computers, tablets and phones, in the
+  look of carsonmit.github.io, with its own home-screen icon (a pair with the Neuron Diagram Maker's). It can be
+  installed from the browser's Add to Home Screen and works offline.
+- Star Battle Solver: the solver translated into JavaScript (`solver.js`); the tests check it takes exactly the same
+  steps, with the same explanations, as `solver.py`.
+- Star Battle Solver: four difficulty levels (Easy, Medium, Hard and a new Expert), graded by which of the solver's
+  rules a puzzle needs and how deep its guessing goes. **Random Puzzle** lets you pick the level and keeps generating
+  until a puzzle really has it (`generator.js`, run in the background by `worker.js`).
+- Star Battle Solver: an eraser for touch screens, checks that stop an unfinished or broken puzzle from being solved
+  (unpainted cells, the wrong number of regions, regions too small), a warning for puzzles with no answer or several,
+  and a question before solving split regions.
+- Star Battle Solver: tests for the JavaScript solver, the example difficulties and the random-puzzle difficulties.
 - This changelog.
+
+### Removed
+- Star Battle Solver: the desktop window (`star_battle_gui.py`); the web app replaces it. `solver.py`,
+  `puzzle_generator.py` and the tests stay.
 
 ## [0.4.0] - 2026-10-01
 

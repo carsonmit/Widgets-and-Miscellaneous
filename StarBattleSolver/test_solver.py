@@ -9,13 +9,25 @@ If everything is fine you'll see "OK" at the end.
 """
 
 import glob
+import json
 import os
+import re
+import shutil
+import subprocess
 import unittest
 
 from solver import StarBattleSolver, check_solution, load_puzzle
 from puzzle_generator import generate_puzzle
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+NODE = shutil.which("node")   # Node.js runs the web app's JavaScript outside a browser
+
+
+def run_js(script, data):
+    """Run a bit of JavaScript with Node.js, handing it `data`; returns what it prints, as JSON."""
+    result = subprocess.run([NODE, "-e", script], input=json.dumps(data), cwd=HERE,
+                            capture_output=True, text=True, check=True)
+    return json.loads(result.stdout)
 
 
 class SolverTests(unittest.TestCase):
@@ -73,6 +85,59 @@ class SolverTests(unittest.TestCase):
             StarBattleSolver(["A" * 10] * 10)          # only 1 region
         with self.assertRaises(ValueError):
             StarBattleSolver(["ABCDEFGHIJ"] * 9)       # 9 rows, not 10
+
+    @unittest.skipUnless(NODE, "Node.js is not installed")
+    def test_web_app_solves_exactly_like_python(self):
+        """
+        solver.js (the web app) is a translation of solver.py. Both must take
+        the same steps, with the same explanations and boards, on every puzzle.
+        """
+        puzzles = [load_puzzle(p) for p in sorted(glob.glob(os.path.join(HERE, "puzzles", "*.txt")))]
+        puzzles += [generate_puzzle(seed=seed) for seed in range(10)]
+        expected = [[[s.action, [list(c) for c in s.cells], s.message, s.grid, s.depth]
+                     for s in StarBattleSolver(p).solve_steps()] for p in puzzles]
+        script = """
+            const { StarBattleSolver } = require('./solver.js');
+            const puzzles = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+            console.log(JSON.stringify(puzzles.map(p => [...new StarBattleSolver(p).solveSteps()]
+              .map(s => [s.action, s.cells, s.message, s.grid, s.depth]))));
+        """
+        actual = run_js(script, puzzles)
+        for i, (want, got) in enumerate(zip(expected, actual)):
+            self.assertEqual(got, want, f"puzzle {i} differs")
+
+    @unittest.skipUnless(NODE, "Node.js is not installed")
+    def test_examples_have_their_difficulty(self):
+        """Each example file's name matches the grade the web app gives it, and the app has the same puzzles."""
+        files = sorted(glob.glob(os.path.join(HERE, "puzzles", "example_*.txt")))
+        script = """
+            const { gradePuzzle } = require('./generator.js');
+            const puzzles = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+            console.log(JSON.stringify(puzzles.map(p => gradePuzzle(p).difficulty)));
+        """
+        grades = run_js(script, [load_puzzle(f) for f in files])
+        with open(os.path.join(HERE, "index.html"), encoding="utf-8") as f:
+            page = f.read()
+        for path, grade in zip(files, grades):
+            level = re.search(r"example_\d+_(\w+)\.txt", path).group(1)
+            self.assertEqual(grade, level, path)
+            self.assertIn(f"{level}: '{' '.join(load_puzzle(path))}'", page, f"index.html's {level} example differs from {path}")
+
+    @unittest.skipUnless(NODE, "Node.js is not installed")
+    def test_random_puzzles_have_the_chosen_difficulty(self):
+        """The web app's generator returns a puzzle of exactly the difficulty asked for."""
+        script = """
+            const { generateWithDifficulty, gradePuzzle } = require('./generator.js');
+            const { StarBattleSolver } = require('./solver.js');
+            const out = ['easy', 'medium', 'hard'].map((d, i) => {
+              const { rows } = generateWithDifficulty(d, { seed: 100 + i });
+              return [d, gradePuzzle(rows).difficulty, new StarBattleSolver(rows).countSolutions(3)];
+            });
+            console.log(JSON.stringify(out));
+        """
+        for wanted, got, solutions in run_js(script, None):
+            self.assertEqual(got, wanted)
+            self.assertEqual(solutions, 1)
 
     def test_steps_are_reported(self):
         """The step-by-step mode starts with 'start' and ends with 'solved'."""
