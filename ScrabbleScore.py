@@ -55,7 +55,7 @@ score_dict = {
     " " : 0
 }
 
-x = str(input("Enter a word/phrase to find its Scrabble Score!:"))
+x = str(input("Enter a word/phrase to find its Scrabble Score!: "))
 score = 0
 for i in x:
     score += score_dict[i]
