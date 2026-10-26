@@ -11,16 +11,39 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Neurons">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#151a21">
+<script>
+  // Night by default; Day if you picked it here or on carsonmit.github.io (they share the setting).
+  try { if (localStorage.getItem('theme') === 'day') document.documentElement.dataset.theme = 'day'; } catch (e) {}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&family=IBM+Plex+Sans:wght@400;500&display=swap">
 <style>
+  /* Colors and fonts match carsonmit.github.io (its DESIGN.md): charcoal and lilac by night (the default),
+     cream and plum by day. The drawing itself always sits on paper, black on white, exactly as it exports. */
   :root {
-    --bg: #f4f2ed; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b70;
-    --line: #dcd9d2; --accent: #2f5bd3; --accent-soft: #e8eefc; --danger: #b3261e;
+    --bg: #151a21; --panel: #1d232c; --ink: #F2EFE8; --muted: #A19E96; --line: #2c3441;
+    --btn: #2a3240; --btn-hover: #333c4b; --accent: #C9ACDE; --on: #151a21; --accent-soft: rgba(201,172,222,.14);
+    --danger: #F28DAE; --code: #252c37; --scrim: rgba(8,10,14,.62);
+    --paper: #FBF8F1; --sel: #6C4487; --firing: #8f8b84;
+    --serif-display: 'DM Serif Display', Georgia, serif;
+    --serif: 'Newsreader', Georgia, serif;
+    --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    color-scheme: dark;
+  }
+  [data-theme="day"] {
+    --bg: #EADFCC; --panel: #F3EBDD; --ink: #1f1a14; --muted: #5c5348; --line: #D6C6AC;
+    --btn: #E2D5BF; --btn-hover: #D9CAB1; --accent: #6C4487; --on: #F3EBDD; --accent-soft: rgba(108,68,135,.11);
+    --danger: #B23A62; --code: #EADFCC; --scrim: rgba(31,26,20,.35);
+    --paper: #FFFDF8; --firing: #bdb4a6;
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
   body {
-    font: 15px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font: 400 14.5px/1.35 var(--sans);
     background: var(--bg); color: var(--ink);
     display: flex; flex-direction: column; overflow: hidden;
     -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
@@ -28,105 +51,143 @@
   header {
     display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
     padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top));
-    padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right));
+    padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right));
     background: var(--panel); border-bottom: 1px solid var(--line);
   }
-  header h1 { font-size: 16px; font-weight: 650; margin: 0 8px 0 0; white-space: nowrap; }
-  .sep { width: 1px; height: 26px; background: var(--line); margin: 0 4px; }
+  header h1 { font: 400 21px/1 var(--serif-display); margin: 0 12px 0 0; white-space: nowrap; }
+  .sep { width: 1px; height: 24px; background: var(--line); margin: 0 6px; }
   .spacer { flex: 1; }
   button {
-    font: inherit; color: var(--ink); background: #fff; cursor: pointer;
-    border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; min-height: 38px;
+    font: 500 14px/1 var(--sans); color: var(--ink); background: var(--btn); cursor: pointer;
+    border: 0; border-radius: 999px; padding: 6px 15px; min-height: 38px;
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    transition: background-color .15s ease, color .15s ease, transform .16s var(--ease-out);
   }
-  button:hover { background: #f6f6f4; }
-  button:disabled { opacity: .35; cursor: default; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button.primary:hover { background: #2a51bd; }
+  @media (hover: hover) { button:hover:not(:disabled) { background: var(--btn-hover); } }
+  button:active:not(:disabled) { transform: scale(.97); }
+  button:disabled { opacity: .38; cursor: default; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: var(--on); }
+  @media (hover: hover) { button.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.07); } }
   button.danger { color: var(--danger); }
   button svg { width: 18px; height: 18px; flex: none; }
 
+  /* Day/night switch: the same one as on carsonmit.github.io */
+  .mode {
+    position: relative; width: 58px; height: 30px; min-height: 0; flex: none; padding: 0; margin-left: 6px;
+    border-radius: 999px; background: var(--btn); color: var(--muted); display: block;
+  }
+  .mode::before { content: ''; position: absolute; inset: -7px; }
+  .mode .ico { position: absolute; top: 8px; width: 14px; height: 14px; }
+  .mode > .sun { left: 8px; }
+  .mode > .moon { right: 8px; }
+  .knob {
+    position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
+    background: var(--accent); color: var(--on); display: grid; place-items: center;
+    transform: translateX(28px); view-transition-name: mode-knob; transition: transform .24s var(--ease-out);
+  }
+  .knob .ico { position: static; width: 14px; height: 14px; }
+  [data-theme="day"] .knob { transform: translateX(0); }
+  [data-theme="day"] .knob .moon, :root:not([data-theme="day"]) .knob .sun { display: none; }
+  html.vt::view-transition-old(root), html.vt::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+  ::view-transition-group(mode-knob) { animation-duration: .24s; animation-timing-function: var(--ease-out); }
+  @keyframes vt-fade-in { from { opacity: 0; } }
+  html.vt-fade::view-transition-new(root) { animation: vt-fade-in .3s ease both; }
+  html.vt-fade::view-transition-group(mode-knob) { animation: none; }
+  html.fade *, html.fade *::before, html.fade *::after { transition: color .3s ease, background-color .3s ease !important; }
+  @media (prefers-reduced-motion: reduce) { .knob { transition: none; } }
+
   .main { flex: 1; display: flex; min-height: 0; }
   .tools {
-    width: 104px; flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px 8px;
+    width: 108px; flex: none; display: flex; flex-direction: column; gap: 6px; padding: 12px 9px;
     background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto;
   }
-  .tools .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 6px 2px 0; }
-  .tool { flex-direction: column; gap: 3px; padding: 7px 3px; font-size: 12px; min-height: 62px; width: 100%; line-height: 1.15; text-align: center; }
+  .tools .label { font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin: 4px 3px 2px; }
+  .tool {
+    flex-direction: column; gap: 4px; padding: 8px 3px; font-size: 12px; font-weight: 400; min-height: 64px; width: 100%;
+    line-height: 1.15; text-align: center; border-radius: 14px; background: transparent;
+  }
   .tool svg { width: 40px; height: 26px; }
-  .tool.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .tool svg [stroke="#000"] { stroke: currentColor; }
+  .tool svg [fill="#fff"] { fill: var(--panel); }
+  .tool svg [fill="#bfbfbf"] { fill: var(--firing); }
+  .tool.active { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
 
-  #stage { flex: 1; position: relative; min-width: 0; background: #fff; overflow: hidden; }
+  #stage { flex: 1; position: relative; min-width: 0; background: var(--paper); overflow: hidden; }
+  #overlay { color: var(--sel); }
   #overlay * { pointer-events: none; }
   #overlay [data-handle] { pointer-events: auto; cursor: grab; }
   #canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
   #hint {
     position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
-    background: rgba(29,29,31,.82); color: #fff; padding: 6px 14px; border-radius: 18px;
+    background: var(--panel); color: var(--ink); padding: 8px 16px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line);
     font-size: 13px; pointer-events: none; max-width: calc(100% - 24px); text-align: center;
   }
+  #hint:empty { display: none; }
   .zoom { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 4px; }
-  .zoom button { min-width: 40px; background: rgba(255,255,255,.95); }
+  .zoom button { min-width: 42px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); }
 
   .props {
-    width: 270px; flex: none; padding: 14px; overflow-y: auto;
+    width: 300px; flex: none; padding: 16px; overflow-y: auto;
     background: var(--panel); border-left: 1px solid var(--line);
   }
-  .props h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
-  .props .row { margin-bottom: 14px; }
-  .props .row > .lbl { display: block; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
+  .props h2 { font: 500 11.5px/1.2 var(--sans); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 2px 0 12px; }
+  .props .row { margin-bottom: 16px; }
+  .props .row > .lbl { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
   .props input[type=text], .props textarea {
-    width: 100%; font: 17px "Times New Roman", Times, serif; padding: 7px 9px;
-    border: 1px solid var(--line); border-radius: 7px; -webkit-user-select: text; user-select: text;
+    width: 100%; font: 17px "Times New Roman", Times, serif; padding: 8px 12px; color: var(--ink);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px; -webkit-user-select: text; user-select: text;
   }
-  .props input[type=range] { width: 100%; }
-  .props p { margin: 0 0 10px; font-size: 14px; color: #3a3a3e; }
-  .props kbd { font: 12px ui-monospace, Menlo, monospace; background: #f1f0ec; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
-  .check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-  .check input { width: 18px; height: 18px; }
+  .props input[type=range] { width: 100%; accent-color: var(--accent); }
+  .props p { margin: 0 0 12px; font: 420 16px/1.45 var(--serif); color: var(--ink); }
+  kbd { font: 500 12px var(--sans); background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; color: var(--ink); }
+  .check { display: flex; align-items: center; gap: 9px; font-size: 14px; }
+  .check input { width: 18px; height: 18px; accent-color: var(--accent); }
   .seg { display: flex; flex-wrap: wrap; gap: 4px; }
-  .seg button { padding: 5px 4px; min-height: 34px; font-size: 12.5px; flex: 1 1 0; min-width: fit-content; }
-  .seg button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-  .swatches { display: flex; gap: 6px; }
-  .swatch { width: 44px; height: 44px; border-radius: 50%; padding: 0; border: 2px solid #999; min-height: 0; }
-  .swatch.on { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .seg button { padding: 5px 6px; min-height: 34px; font-size: 12.5px; flex: 1 1 0; min-width: fit-content; }
+  .seg button.on { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .swatches { display: flex; gap: 8px; }
+  .swatch { width: 44px; height: 44px; border-radius: 50%; padding: 0; min-height: 0; box-shadow: inset 0 0 0 2px var(--muted); }
+  .swatch.on { outline: 2.5px solid var(--accent); outline-offset: 3px; }
   .btnrow { display: flex; gap: 6px; flex-wrap: wrap; }
-  .small { font-size: 12px; color: var(--muted); }
+  .small { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
 
-  /* dialogs */
+  /* dialogs (flat, like the site: depth from color, not shadows) */
   .overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none;
+    position: fixed; inset: 0; background: var(--scrim); display: none;
     align-items: center; justify-content: center; padding: 16px; z-index: 10;
   }
   .overlay.open { display: flex; }
   .dialog {
-    background: #fff; border-radius: 14px; width: min(720px, 100%); max-height: 100%;
-    overflow: auto; padding: 18px 20px; box-shadow: 0 10px 40px rgba(0,0,0,.25);
+    background: var(--panel); color: var(--ink); border-radius: 20px; width: min(720px, 100%); max-height: 100%;
+    overflow: auto; padding: 24px 28px; box-shadow: inset 0 0 0 1px var(--line);
   }
-  .dialog h2 { margin: 0 0 6px; font-size: 19px; }
-  .dialog p { margin: 6px 0 12px; color: #3a3a3e; }
-  .dialog code { font: 13px ui-monospace, Menlo, monospace; background: #f1f0ec; padding: 1px 4px; border-radius: 4px; }
+  .dialog h2 { margin: 0 0 8px; font: 400 30px/1.15 var(--serif-display); }
+  .dialog p { margin: 8px 0 14px; font: 420 17px/1.45 var(--serif); }
+  code { font: 13px ui-monospace, Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 5px; }
   .dialog textarea {
-    width: 100%; height: 260px; font: 12.5px/1.4 ui-monospace, Menlo, Consolas, monospace;
-    border: 1px solid var(--line); border-radius: 8px; padding: 10px; resize: vertical;
+    width: 100%; height: 260px; font: 12.5px/1.45 ui-monospace, Menlo, Consolas, monospace; color: var(--ink);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px; resize: vertical;
     -webkit-user-select: text; user-select: text; white-space: pre; overflow: auto;
   }
-  .dialog .opts { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 10px 0; align-items: center; }
-  .dialog .opts label { display: flex; align-items: center; gap: 6px; font-size: 14px; }
-  .dialog select, .dialog input[type=text] { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; background: #fff; }
-  .dialog .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 12px; }
-  .preview { background: #f4f2ed; border-radius: 10px; padding: 14px; display: flex; justify-content: center; }
-  .preview img { max-width: 100%; max-height: 300px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
-  .help h3 { font-size: 15px; margin: 16px 0 4px; }
+  .dialog .opts { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 12px 0; align-items: center; }
+  .dialog .opts label { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .dialog .opts input[type=checkbox] { accent-color: var(--accent); width: 17px; height: 17px; }
+  .dialog select, .dialog input[type=text] { font: inherit; color: var(--ink); padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); }
+  .dialog .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 16px; }
+  .preview { background: var(--bg); border-radius: 14px; padding: 16px; display: flex; justify-content: center; }
+  .preview img { max-width: 100%; max-height: 300px; background: #fff; }
+  .help h3 { font: 500 12px/1.2 var(--sans); text-transform: uppercase; letter-spacing: .08em; color: var(--accent); margin: 22px 0 6px; }
   .help ul { margin: 4px 0; padding-left: 20px; }
-  .help li { margin: 3px 0; }
+  .help li { margin: 4px 0; font: 420 17px/1.45 var(--serif); }
 
   #toast {
     position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px);
-    background: #1d1d1f; color: #fff; padding: 10px 18px; border-radius: 10px; font-size: 14px;
-    opacity: 0; transition: .2s; pointer-events: none; z-index: 20;
+    background: var(--ink); color: var(--bg); padding: 11px 20px; border-radius: 999px; font-size: 14px;
+    opacity: 0; transition: opacity .2s ease, transform .2s var(--ease-out); pointer-events: none; z-index: 20;
   }
   #toast.show { opacity: 1; transform: translateX(-50%); }
+  @media (prefers-reduced-motion: reduce) { #toast { transform: translateX(-50%); } button:active:not(:disabled) { transform: none; } }
 
   @media (max-width: 960px) {
     header h1 { display: none; }
@@ -138,10 +199,14 @@
     .main { display: flex; flex-direction: column; }
     .tools { width: auto; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; padding: 6px 8px; }
     .tools .label { display: none; }
-    .tool { width: auto; min-width: 74px; min-height: 54px; }
+    .tool { width: auto; min-width: 76px; min-height: 54px; flex: none; }
     .props { width: auto; border-left: 0; border-top: 1px solid var(--line); max-height: 36vh; }
     header h1 { display: none; }
     .hide-narrow { display: none; }
+    header { gap: 5px; }
+    header .sep { display: none; }
+    header button:not(.mode) { padding: 6px 11px; font-size: 13.5px; }
+    .mode { margin-left: 2px; }
   }
 </style>
 </head>
@@ -158,25 +223,30 @@
   <input type="file" id="fileInput" accept=".json,.neuron,application/json" hidden>
   <div class="spacer"></div>
   <button id="helpBtn">Help</button>
-  <button id="imgBtn">Export image</button>
+  <button id="imgBtn">Export Image</button>
   <button id="tikzBtn" class="primary">Export LaTeX</button>
+  <button class="mode" id="mode" type="button" role="switch" aria-checked="true" aria-label="Dark mode">
+    <svg class="ico sun" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="currentColor"/><g stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 1.2v1.6M8 13.2v1.6M1.2 8h1.6M13.2 8h1.6M3.2 3.2l1.1 1.1M11.7 11.7l1.1 1.1M3.2 12.8l1.1-1.1M11.7 4.3l1.1-1.1"/></g></svg>
+    <svg class="ico moon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M13.6 10.4A6 6 0 0 1 5.6 2.4a6 6 0 1 0 8 8z"/></svg>
+    <span class="knob"><svg class="ico sun" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="currentColor"/><g stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 1.2v1.6M8 13.2v1.6M1.2 8h1.6M13.2 8h1.6M3.2 3.2l1.1 1.1M11.7 11.7l1.1 1.1M3.2 12.8l1.1-1.1M11.7 4.3l1.1-1.1"/></g></svg><svg class="ico moon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M13.6 10.4A6 6 0 0 1 5.6 2.4a6 6 0 1 0 8 8z"/></svg></span>
+  </button>
 </header>
 
 <div class="main">
   <nav class="tools" id="tools">
     <div class="label">Tools</div>
     <button class="tool" data-tool="select" title="Select & move (V)">
-      <svg viewBox="0 0 40 26"><path d="M14 3 L14 22 L19 17 L23 25 L26 23.5 L22 16 L28 16 Z" fill="currentColor"/></svg>Select / move</button>
+      <svg viewBox="0 0 40 26"><path d="M14 3 L14 22 L19 17 L23 25 L26 23.5 L22 16 L28 16 Z" fill="currentColor"/></svg>Select / Move</button>
     <button class="tool" data-tool="neuron-firing" title="Add firing neuron (F)">
-      <svg viewBox="0 0 40 26"><circle cx="20" cy="13" r="10" fill="#bfbfbf" stroke="#000" stroke-width="1.4"/></svg>Firing neuron</button>
+      <svg viewBox="0 0 40 26"><circle cx="20" cy="13" r="10" fill="#bfbfbf" stroke="#000" stroke-width="1.4"/></svg>Firing Neuron</button>
     <button class="tool" data-tool="neuron-idle" title="Add non-firing neuron (N)">
-      <svg viewBox="0 0 40 26"><circle cx="20" cy="13" r="10" fill="#fff" stroke="#000" stroke-width="1.4"/></svg>Non-firing neuron</button>
+      <svg viewBox="0 0 40 26"><circle cx="20" cy="13" r="10" fill="#fff" stroke="#000" stroke-width="1.4"/></svg>Non-Firing Neuron</button>
     <button class="tool" data-tool="stim" title="Draw stimulatory arrow (A)">
       <svg viewBox="0 0 40 26"><path d="M4 13 H30" stroke="currentColor" stroke-width="1.8"/><path d="M37 13 L28 8.5 L30.5 13 L28 17.5 Z" fill="currentColor"/></svg>Stimulates</button>
     <button class="tool" data-tool="inhib" title="Draw inhibitory link (I)">
       <svg viewBox="0 0 40 26"><path d="M4 13 H32" stroke="currentColor" stroke-width="1.8"/><circle cx="32" cy="13" r="4" fill="currentColor"/></svg>Inhibits</button>
     <button class="tool" data-tool="line" title="Draw plain line (L)">
-      <svg viewBox="0 0 40 26"><path d="M4 13 H36" stroke="currentColor" stroke-width="1.8"/></svg>Plain line</button>
+      <svg viewBox="0 0 40 26"><path d="M4 13 H36" stroke="currentColor" stroke-width="1.8"/></svg>Plain Line</button>
     <button class="tool" data-tool="text" title="Add text label (T)">
       <svg viewBox="0 0 40 26"><text x="20" y="20" text-anchor="middle" font-family="Times New Roman, serif" font-style="italic" font-size="20" fill="currentColor">t₁</text></svg>Text</button>
   </nav>
@@ -185,7 +255,7 @@
     <svg id="canvas" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet">
       <defs>
         <pattern id="gridPat" width="20" height="20" patternUnits="userSpaceOnUse">
-          <circle cx="0" cy="0" r="1.1" fill="#cfcac0"/>
+          <circle cx="0" cy="0" r="1.1" fill="#cdc5b6"/>
         </pattern>
       </defs>
       <rect id="gridRect" fill="url(#gridPat)"/>
@@ -230,9 +300,9 @@
     <textarea id="tzOut" readonly spellcheck="false"></textarea>
     <p class="small">“Size” scales the drawing; labels stay the size of your document’s text, so long labels may not fit inside small neurons. “Complete test document” gives a whole file you can paste into a blank Overleaf project to check the picture compiles.</p>
     <div class="actions">
-      <button id="tzDownload">Download .tex</button>
+      <button id="tzDownload">Download the .tex File</button>
       <button id="tzClose">Close</button>
-      <button id="tzCopy" class="primary">Copy code</button>
+      <button id="tzCopy" class="primary">Copy Code</button>
     </div>
   </div>
 </div>
@@ -240,8 +310,8 @@
 <!-- Image export -->
 <div class="overlay" id="imgDlg">
   <div class="dialog">
-    <h2>Export as an image</h2>
-    <p>For Word or Google Docs: press <b>Copy image</b> and then paste into your document, or download the file and use <b>Insert → Picture/Image</b>. You can resize it in the document by dragging a corner.</p>
+    <h2>Export as an Image</h2>
+    <p>For Word or Google Docs: press <b>Copy Image</b> and then paste into your document, or download the file and use <b>Insert → Picture/Image</b>. You can resize it in the document by dragging a corner.</p>
     <div class="preview"><img id="imgPreview" alt="Preview of the exported diagram"></div>
     <div class="opts">
       <label>Format
@@ -261,9 +331,9 @@
     </div>
     <div class="actions">
       <button id="imgClose">Close</button>
-      <button id="imgShare" style="display:none">Share / Save to Photos…</button>
+      <button id="imgShare" style="display:none">Share or Save to Photos…</button>
       <button id="imgDownload">Download</button>
-      <button id="imgCopy" class="primary">Copy image</button>
+      <button id="imgCopy" class="primary">Copy Image</button>
     </div>
   </div>
 </div>
@@ -271,39 +341,39 @@
 <!-- Help -->
 <div class="overlay" id="helpDlg">
   <div class="dialog help">
-    <h2>How to use Neuron Diagram Maker</h2>
+    <h2>How to Use the Neuron Diagram Maker</h2>
     <h3>Drawing</h3>
     <ul>
-      <li><b>Neurons:</b> pick <i>Firing neuron</i> (gray) or <i>Non-firing neuron</i> (white), then tap or click on the canvas.</li>
-      <li><b>Connections:</b> pick <i>Stimulates</i> (arrow), <i>Inhibits</i> (line ending in a dot) or <i>Plain line</i>, then drag from one neuron to another. You can also tap the first neuron, then tap the second.</li>
+      <li><b>Neurons:</b> pick <i>Firing Neuron</i> (gray) or <i>Non-Firing Neuron</i> (white), then tap or click on the canvas.</li>
+      <li><b>Connections:</b> pick <i>Stimulates</i> (arrow), <i>Inhibits</i> (line ending in a dot) or <i>Plain Line</i>, then drag from one neuron to another. You can also tap the first neuron, then tap the second.</li>
       <li><b>Text:</b> pick <i>Text</i> and tap where it should go (handy for time labels like t_1, t_2).</li>
       <li><b>Moving:</b> drag any neuron or text. Drag a connection sideways to curve it.</li>
       <li><b>Moving around the page:</b> drag on empty space. Pinch (iPad / trackpad) or use the + / − buttons to zoom.</li>
     </ul>
-    <h3>Changing how things look</h3>
+    <h3>Changing How Things Look</h3>
     <ul>
       <li>Select something (with the <i>Select</i> tool, or just tap it) and use the panel on the right: label, shading, border (e.g. thick for a “stubborn” neuron), size, arrow type, dashed lines, curve…</li>
-      <li>To change several neurons at once, hold <kbd>Shift</kbd> while clicking them, or use <i>Select all</i>.</li>
-      <li><b>Labels:</b> type <code>c</code>, <code>e</code>, <code>c_1</code> (subscript), <code>c'</code>, <code>\alpha</code>… They are set in italics like LaTeX math. Untick “math” for ordinary text.</li>
+      <li>To change several neurons at once, hold <kbd>Shift</kbd> while clicking them, or use <i>Select All</i>.</li>
+      <li><b>Labels:</b> type <code>c</code>, <code>e</code>, <code>c_1</code> (subscript), <code>c'</code>, <code>\alpha</code>… They are set in italics like LaTeX math. Untick “Label as math” for ordinary text.</li>
     </ul>
-    <h3>Getting it into your paper</h3>
+    <h3>Getting It into Your Paper</h3>
     <ul>
-      <li><b>LaTeX:</b> <i>Export LaTeX</i> → <i>Copy code</i> → paste into your .tex file. Add <code>\usepackage{tikz}</code> to the preamble once.</li>
-      <li><b>Word / Google Docs:</b> <i>Export image</i> → <i>Copy image</i> → paste. Or download the PNG and insert it.</li>
+      <li><b>LaTeX:</b> <i>Export LaTeX</i> → <i>Copy Code</i> → paste into your .tex file. Add <code>\usepackage{tikz}</code> to the preamble once.</li>
+      <li><b>Word / Google Docs:</b> <i>Export Image</i> → <i>Copy Image</i> → paste. Or download the PNG and insert it.</li>
     </ul>
     <h3>Saving</h3>
     <ul>
       <li>Your current diagram is remembered automatically in this browser.</li>
       <li>To keep several diagrams, use <i>Save…</i> to store each as a file, and <i>Open…</i> to edit it later.</li>
     </ul>
-    <h3>Keyboard shortcuts</h3>
+    <h3>Keyboard Shortcuts</h3>
     <ul>
       <li><kbd>V</kbd> select · <kbd>F</kbd> firing neuron · <kbd>N</kbd> non-firing neuron · <kbd>A</kbd> stimulates · <kbd>I</kbd> inhibits · <kbd>L</kbd> line · <kbd>T</kbd> text</li>
       <li><kbd>Delete</kbd> remove selection · <kbd>⌘Z</kbd> undo · <kbd>⇧⌘Z</kbd> redo · <kbd>⌘A</kbd> select all · <kbd>⌘D</kbd> duplicate · arrow keys nudge</li>
     </ul>
     <div class="actions">
-      <button id="exampleBtn">Load an example diagram</button>
-      <button id="helpClose" class="primary">Got it</button>
+      <button id="exampleBtn">Load an Example Diagram</button>
+      <button id="helpClose" class="primary">Got It</button>
     </div>
   </div>
 </div>
@@ -524,26 +594,26 @@ function renderOverlay() {
     const k = kindOf(id), it = getItem(id);
     if (!it) continue;
     if (k === 'neuron') {
-      s += `<circle cx="${it.x}" cy="${it.y}" r="${it.r + 6 / z + 2}" fill="none" stroke="#2f5bd3" stroke-width="${2 / z}" stroke-dasharray="${5 / z} ${4 / z}"/>`;
+      s += `<circle cx="${it.x}" cy="${it.y}" r="${it.r + 6 / z + 2}" fill="none" stroke="currentColor" stroke-width="${2 / z}" stroke-dasharray="${5 / z} ${4 / z}"/>`;
     } else if (k === 'edge') {
       const g = edgeGeom(it); if (!g) continue;
-      s += `<path d="${edgePathD(g)}" fill="none" stroke="#2f5bd3" stroke-opacity=".35" stroke-width="${g.w + 7 / z}" stroke-linecap="round" pointer-events="none"/>`;
+      s += `<path d="${edgePathD(g)}" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="${g.w + 7 / z}" stroke-linecap="round" pointer-events="none"/>`;
       if (selection.size === 1)
-        s += `<circle data-handle="${it.id}" cx="${g.handle.x}" cy="${g.handle.y}" r="${8 / z}" fill="#fff" stroke="#2f5bd3" stroke-width="${2 / z}"><title>Drag to curve</title></circle>`;
+        s += `<circle data-handle="${it.id}" cx="${g.handle.x}" cy="${g.handle.y}" r="${8 / z}" fill="#fff" stroke="currentColor" stroke-width="${2 / z}"><title>Drag to curve</title></circle>`;
     } else {
       const el = contentG.querySelector(`[data-id="${id}"] text`);
       if (el) {
         const b = el.getBBox(), p = 4 / z;
-        s += `<rect x="${b.x - p}" y="${b.y - p}" width="${b.width + 2 * p}" height="${b.height + 2 * p}" fill="none" stroke="#2f5bd3" stroke-width="${2 / z}" stroke-dasharray="${5 / z} ${4 / z}" rx="${3 / z}"/>`;
+        s += `<rect x="${b.x - p}" y="${b.y - p}" width="${b.width + 2 * p}" height="${b.height + 2 * p}" fill="none" stroke="currentColor" stroke-width="${2 / z}" stroke-dasharray="${5 / z} ${4 / z}" rx="${3 / z}"/>`;
       }
     }
   }
   if (pendingFrom) {
     const n = getNeuron(pendingFrom);
-    if (n) s += `<circle cx="${n.x}" cy="${n.y}" r="${n.r + 5 / z + 2}" fill="none" stroke="#2f5bd3" stroke-width="${3 / z}"/>`;
+    if (n) s += `<circle cx="${n.x}" cy="${n.y}" r="${n.r + 5 / z + 2}" fill="none" stroke="currentColor" stroke-width="${3 / z}"/>`;
   }
   if (rubber) {
-    s += `<line x1="${rubber.from.x}" y1="${rubber.from.y}" x2="${rubber.to.x}" y2="${rubber.to.y}" stroke="#2f5bd3" stroke-width="${2 / z}" stroke-dasharray="${6 / z} ${4 / z}"/>`;
+    s += `<line x1="${rubber.from.x}" y1="${rubber.from.y}" x2="${rubber.to.x}" y2="${rubber.to.y}" stroke="currentColor" stroke-width="${2 / z}" stroke-dasharray="${6 / z} ${4 / z}"/>`;
   }
   overlayG.innerHTML = s;
 }
@@ -928,11 +998,11 @@ function renderProps(force) {
   let h = '';
 
   if (!selection.size) {
-    h += `<h2>Getting started</h2>${toolTip()}
+    h += `<h2>Getting Started</h2>${toolTip()}
       <div class="row"><label class="check"><input type="checkbox" data-setting="snap" ${snapOn ? 'checked' : ''}> Snap to grid</label></div>
       <div class="row"><label class="check"><input type="checkbox" data-setting="grid" ${gridOn ? 'checked' : ''}> Show grid dots</label></div>
-      <div class="row btnrow"><button data-act="selectall" ${doc.neurons.length ? '' : 'disabled'}>Select all</button></div>
-      <p class="small">Tap <b>Help</b> (top right) for a full guide.</p>`;
+      <div class="row btnrow"><button data-act="selectall" ${doc.neurons.length ? '' : 'disabled'}>Select All</button></div>
+      <p class="small">Tap <b>Help</b> at the top for a full guide.</p>`;
     propsEl.innerHTML = h; return;
   }
 
@@ -941,7 +1011,7 @@ function renderProps(force) {
     h += `<h2>${one ? 'Neuron' : ns.length + ' neurons'}</h2>`;
     if (one) h += `<div class="row"><span class="lbl">Label</span><input type="text" data-field="label" value="${esc(one.label)}" placeholder="e.g. c, e, d_1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>`;
     h += `<div class="row"><label class="check"><input type="checkbox" data-field="math" ${common(ns, 'math') !== false ? 'checked' : ''}> Label as math (italic)</label></div>`;
-    h += `<div class="row"><span class="lbl">Label position</span>${seg('labelPos', [['center', 'Inside'], ['above', 'Above'], ['below', 'Below'], ['left', 'Left'], ['right', 'Right']], common(ns, 'labelPos'))}</div>`;
+    h += `<div class="row"><span class="lbl">Label Position</span>${seg('labelPos', [['center', 'Inside'], ['above', 'Above'], ['below', 'Below'], ['left', 'Left'], ['right', 'Right']], common(ns, 'labelPos'))}</div>`;
     h += `<div class="row"><span class="lbl">Shading</span><div class="swatches" data-key="fill">` +
       Object.entries(FILLS).map(([k, f]) => `<button class="swatch ${common(ns, 'fill') === k ? 'on' : ''}" data-v="${k}" title="${f.name}" style="background:${f.svg}"></button>`).join('') +
       `</div><div class="small" style="margin-top:4px">${FILLS[common(ns, 'fill')]?.name || 'Mixed'}</div></div>`;
@@ -952,13 +1022,13 @@ function renderProps(force) {
   } else if (es.length && !ns.length && !ts.length) {
     const one = es.length === 1 ? es[0] : null;
     h += `<h2>${one ? 'Connection' : es.length + ' connections'}</h2>`;
-    h += `<div class="row"><span class="lbl">Type</span>${seg('kind', [['stim', 'Stimulates →'], ['inhib', 'Inhibits ⊸'], ['line', 'Plain line']], common(es, 'kind'))}</div>`;
+    h += `<div class="row"><span class="lbl">Type</span>${seg('kind', [['stim', 'Stimulates →'], ['inhib', 'Inhibits ⊸'], ['line', 'Plain Line']], common(es, 'kind'))}</div>`;
     h += `<div class="row"><span class="lbl">Line</span>${seg('style', [['solid', 'Solid'], ['dashed', 'Dashed'], ['dotted', 'Dotted']], common(es, 'style'))}</div>`;
     h += `<div class="row"><span class="lbl">Thickness</span>${seg('width', [['normal', 'Normal'], ['thick', 'Thick']], common(es, 'width'))}</div>`;
     if (one) {
       h += `<div class="row"><span class="lbl">Curve</span><input type="range" data-field="bend" min="-90" max="90" step="1" value="${one.bend || 0}">
         <div class="small">Tip: you can also drag the line (or its round handle) sideways.</div></div>`;
-      h += `<div class="row btnrow"><button data-act="straighten">Straighten</button><button data-act="reverse">Reverse direction</button></div>`;
+      h += `<div class="row btnrow"><button data-act="straighten">Straighten</button><button data-act="reverse">Reverse Direction</button></div>`;
     }
   } else if (ts.length && !ns.length && !es.length) {
     const one = ts.length === 1 ? ts[0] : null;
@@ -1308,6 +1378,47 @@ new ResizeObserver(applyView).observe(svg);
 render();
 requestAnimationFrame(() => { fitView(); renderProps(true); });
 if (firstVisit) setTimeout(() => openDialog('helpDlg'), 300);
+
+/* ================================================================
+   Night and Day (the same switch, setting and animation as on
+   carsonmit.github.io: a circle of the new colors spreads from the
+   switch). Only the app's frame changes; the drawing stays on paper.
+   ================================================================ */
+(() => {
+  const root = document.documentElement, btn = $('mode'), meta = document.querySelector('meta[name="theme-color"]');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  const show = () => {
+    const day = root.dataset.theme === 'day';
+    btn.setAttribute('aria-checked', day ? 'false' : 'true');
+    meta.content = day ? '#F3EBDD' : '#151a21';
+  };
+  const apply = t => { root.dataset.theme = t; show(); try { localStorage.setItem('theme', t); } catch (e) {} };
+  show();
+  btn.addEventListener('click', () => {
+    const next = root.dataset.theme === 'day' ? 'night' : 'day';
+    if (!document.startViewTransition) {   // older browsers: fade the colors together
+      root.classList.add('fade'); apply(next); setTimeout(() => root.classList.remove('fade'), 350); return;
+    }
+    root.classList.add('vt');
+    if (reduce.matches) {                   // reduced motion: one gentle crossfade
+      root.classList.add('vt-fade');
+      document.startViewTransition(() => apply(next)).finished.finally(() => root.classList.remove('vt', 'vt-fade'));
+      return;
+    }
+    const r = btn.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const w = innerWidth, h = innerHeight;
+    const end = Math.hypot(Math.max(x, w - x), Math.max(y, h - y)) / (Math.hypot(w, h) / Math.SQRT2) * 100;
+    const at = `at ${x / w * 100}% ${y / h * 100}%`;
+    const vt = document.startViewTransition(() => apply(next));
+    vt.ready.then(() => root.animate(
+      { clipPath: [`circle(0% ${at})`, `circle(${end}% ${at})`] },
+      { duration: 560, easing: 'cubic-bezier(0.77, 0, 0.175, 1)', pseudoElement: '::view-transition-new(root)' }
+    ));
+    vt.finished.finally(() => root.classList.remove('vt'));
+  });
+  // Follow a change made in another tab (for example on the website).
+  addEventListener('storage', e => { if (e.key === 'theme') { root.dataset.theme = e.newValue === 'day' ? 'day' : 'night'; show(); } });
+})();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

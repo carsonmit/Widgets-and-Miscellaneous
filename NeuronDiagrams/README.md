@@ -17,16 +17,24 @@ It works in Safari, Chrome, Firefox and Edge on Mac, Windows, iPad and phones (m
 | Connections | stimulatory arrow, inhibitory (line ending in a dot), plain line · solid / dashed / dotted · normal / thick · straight or curved · reverse direction |
 | Text | free labels such as time stamps *t*₁, *t*₂ · small / normal / large |
 
-Labels are typeset like LaTeX math: `c`, `c_1`, `c_{12}`, `c'`, `c^*`, `\alpha`. Untick "math" for ordinary words.
+Labels are typeset like LaTeX math: `c`, `c_1`, `c_{12}`, `c'`, `c^*`, `\alpha`. Untick "Label as math" for ordinary words.
 
 ## Exporting
 
-- **Export LaTeX** → *Copy code* → paste into the `.tex` file where the diagram should go.
+- **Export LaTeX** → *Copy Code* → paste into the `.tex` file where the diagram should go.
   The only requirement is `\usepackage{tikz}` once in the preamble — no TikZ libraries are needed,
   because arrowheads are drawn as plain filled shapes. Layout choices: centered, numbered figure with caption,
   bare `tikzpicture`, or a complete test document for Overleaf.
-- **Export image** → *Copy image* and paste, or *Download* a PNG (150 / 300 / 600 dpi; the dpi is written into the file
-  so Word inserts it at its true size) or an SVG. On iPad, *Share / Save to Photos…* opens the iOS share sheet.
+- **Export Image** → *Copy Image* and paste, or *Download* a PNG (150 / 300 / 600 dpi; the dpi is written into the file
+  so Word inserts it at its true size) or an SVG. On iPad, *Share or Save to Photos…* opens the iOS share sheet.
+
+## Night and Day
+
+The app wears the same colors and fonts as [carsonmit.github.io](https://carsonmit.github.io): charcoal and lilac
+by night (the default), cream and plum by day, with DM Serif Display, Newsreader and IBM Plex Sans. The sun/moon
+switch at the top right changes the mode, and the choice is shared with the website, since both live at the same
+web address. Only the frame around the drawing changes: the drawing itself always sits on paper, black on white,
+exactly as it exports. Without an internet connection the fonts fall back to similar built-in ones.
 
 ## Saving
 
@@ -57,6 +65,7 @@ Double-clicking `index.html` on a Mac or PC opens a fully working copy in the br
 
 | File | Purpose |
 |---|---|
-| `index.html` | the whole app (HTML, CSS and JavaScript, no dependencies) |
-| `manifest.webmanifest`, `icon*.png`, `icon.svg` | name and icon for "Add to Home Screen" |
+| `index.html` | the whole app (HTML, CSS and JavaScript; the only outside files are three free Google Fonts) |
+| `manifest.webmanifest`, `icon-180.png`, `icon-512.png`, `icon-maskable-512.png` | name and home-screen icon for "Add to Home Screen" (cream; the maskable copy has extra margin for Android's round icons) |
+| `icon.svg` | browser-tab icon: cream in a light browser, charcoal in a dark one |
 | `sw.js` | service worker that caches the app for offline use |

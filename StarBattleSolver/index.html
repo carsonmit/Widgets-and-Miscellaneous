@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Star Battle Solver</title>
+<meta name="description" content="Paint in a Star Battle puzzle, or make a random one at your chosen difficulty, and watch it solved step by step, each step explained in plain English.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Star Battle">
+<meta name="theme-color" content="#151a21">
+<script>
+  // Night by default; Day if you picked it here or on carsonmit.github.io (they share the setting).
+  try { if (localStorage.getItem('theme') === 'day') document.documentElement.dataset.theme = 'day'; } catch (e) {}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+  /* Colors and fonts match carsonmit.github.io and the Neuron Diagram Maker: charcoal and lilac by night (the
+     default), cream and plum by day. The board itself is always paper with pastel regions. */
+  :root {
+    --bg: #151a21; --panel: #1d232c; --ink: #F2EFE8; --muted: #A19E96; --line: #2c3441;
+    --btn: #2a3240; --btn-hover: #333c4b; --accent: #C9ACDE; --on: #151a21; --accent-soft: rgba(201,172,222,.14);
+    --gold: #E3C77A; --rose: #F28DAE; --code: #252c37; --scrim: rgba(8,10,14,.62); --paper: #FBF8F1;
+    --serif-display: 'DM Serif Display', Georgia, serif;
+    --serif: 'Newsreader', Georgia, serif;
+    --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    color-scheme: dark;
+  }
+  [data-theme="day"] {
+    --bg: #EADFCC; --panel: #F3EBDD; --ink: #1f1a14; --muted: #5c5348; --line: #D6C6AC;
+    --btn: #E2D5BF; --btn-hover: #D9CAB1; --accent: #6C4487; --on: #F3EBDD; --accent-soft: rgba(108,68,135,.11);
+    --gold: #8C6A1A; --rose: #B23A62; --code: #EADFCC; --scrim: rgba(31,26,20,.35); --paper: #FFFDF8;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font: 400 14.5px/1.35 var(--sans); background: var(--bg); color: var(--ink);
+    height: 100dvh; display: flex; flex-direction: column; overflow: hidden; -webkit-tap-highlight-color: transparent;
+  }
+  button, select {
+    font: 500 14px/1 var(--sans); color: var(--ink); background-color: var(--btn); cursor: pointer;
+    border: 0; border-radius: 999px; padding: 6px 15px; min-height: 38px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;
+    transition: background-color .15s ease, color .15s ease, transform .16s var(--ease-out);
+  }
+  select {
+    appearance: none; -webkit-appearance: none; padding-right: 34px;
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: right 18px top 52%, right 13px top 52%; background-size: 5px 5px; background-repeat: no-repeat;
+  }
+  @media (hover: hover) { button:hover:not(:disabled), select:hover { background-color: var(--btn-hover); } }
+  button:active:not(:disabled) { transform: scale(.97); }
+  button:disabled { opacity: .38; cursor: default; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background-color: var(--accent); color: var(--on); }
+  @media (hover: hover) { button.primary:hover:not(:disabled) { background-color: var(--accent); filter: brightness(1.07); } }
+  .short { display: none; }
+
+  header {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 8px 14px; padding-top: max(8px, env(safe-area-inset-top));
+    padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right));
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  header h1 { font: 400 21px/1 var(--serif-display); margin: 0 12px 0 0; white-space: nowrap; }
+  .spacer { flex: 1; }
+
+  /* Day/night switch: the same one as on carsonmit.github.io */
+  .mode { position: relative; width: 58px; height: 30px; min-height: 0; flex: none; padding: 0; margin-left: 6px; border-radius: 999px; background: var(--btn); color: var(--muted); display: block; }
+  .mode::before { content: ''; position: absolute; inset: -7px; }
+  .mode .ico { position: absolute; top: 8px; width: 14px; height: 14px; }
+  .mode > .sun { left: 8px; } .mode > .moon { right: 8px; }
+  .knob { position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--on); display: grid; place-items: center; transform: translateX(28px); view-transition-name: mode-knob; transition: transform .24s var(--ease-out); }
+  .knob .ico { position: static; width: 14px; height: 14px; }
+  [data-theme="day"] .knob { transform: translateX(0); }
+  [data-theme="day"] .knob .moon, :root:not([data-theme="day"]) .knob .sun { display: none; }
+  html.vt::view-transition-old(root), html.vt::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+  ::view-transition-group(mode-knob) { animation-duration: .24s; animation-timing-function: var(--ease-out); }
+  @keyframes vt-fade-in { from { opacity: 0; } }
+  html.vt-fade::view-transition-new(root) { animation: vt-fade-in .3s ease both; }
+  html.vt-fade::view-transition-group(mode-knob) { animation: none; }
+  html.fade *, html.fade *::before, html.fade *::after { transition: color .3s ease, background-color .3s ease !important; }
+  @media (prefers-reduced-motion: reduce) { .knob { transition: none; } }
+
+  /* Layout: the board on paper, the controls and the list of steps beside it */
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .stage { position: relative; display: grid; place-items: center; padding: 24px; background: var(--paper); min-height: 0; min-width: 0; }
+  .board { display: block; width: min(100%, calc(100dvh - 110px)); height: auto; touch-action: none; user-select: none; -webkit-user-select: none; cursor: crosshair; border-radius: 2px; }
+  .board:focus { outline: none; }
+  .board:focus-visible { outline: 2px solid #6C4487; outline-offset: 6px; }
+  .side { display: grid; grid-template-columns: 340px 360px; min-height: 0; }
+  .ctrl, .steps { background: var(--panel); border-left: 1px solid var(--line); padding: 18px; overflow-y: auto; min-height: 0; }
+  .ctrl section + section { margin-top: 26px; }
+  @media (max-width: 1240px) {
+    .side { display: block; width: 340px; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line); }
+    .ctrl, .steps { border-left: 0; overflow: visible; }
+    .steps { padding-top: 0; }
+  }
+  @media (max-width: 760px) {
+    body { height: auto; min-height: 100dvh; overflow: auto; }
+    header h1 { display: none; }
+    header { gap: 5px; }
+    header button:not(.mode), header select { padding: 6px 11px; font-size: 13.5px; }
+    header select { padding-right: 30px; background-position: right 16px top 52%, right 11px top 52%; }
+    .full { display: none; } .short { display: inline; }
+    main { display: block; }
+    .stage { padding: 12px; }
+    .board { width: 100%; }
+    .side { display: block; width: auto; border-left: 0; overflow: visible; }
+  }
+
+  .lbl { font: 500 11.5px/1.2 var(--sans); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .lbl .num { color: var(--accent); }
+  .hint { font: 420 15.5px/1.45 var(--serif); color: var(--muted); margin: 0 0 12px; }
+  .badge { margin-left: auto; font: 500 11.5px/1 var(--sans); letter-spacing: .06em; padding: 6px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); text-transform: uppercase; }
+  .badge.warn { background: transparent; color: var(--rose); box-shadow: inset 0 0 0 1.5px var(--rose); }
+  .badge:empty { display: none; }
+  .sw { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; }
+  .sw button { min-height: 0; aspect-ratio: 1; padding: 0; border-radius: 12px; color: #1f1a14; font-weight: 500; }
+  .sw button.on { box-shadow: 0 0 0 2.5px var(--panel), 0 0 0 4.5px var(--ink); }
+  .sw .eraser { background: var(--paper); color: #5c5348; }
+  .sw .eraser svg { width: 20px; height: 20px; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .row > button { flex: 1 1 auto; }
+  .between { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
+  .small { font-size: 13px; color: var(--muted); }
+  .seg { display: inline-flex; background: var(--btn); border-radius: 999px; padding: 3px; gap: 2px; flex: none; }
+  .seg button { min-height: 32px; padding: 4px 14px; background: transparent; }
+  .seg button.on { background: var(--accent); color: var(--on); }
+  .issue { font: 420 15.5px/1.45 var(--serif); color: var(--rose); margin: 12px 0 0; }
+  .issue:empty { display: none; }
+  .stats { display: grid; grid-template-columns: repeat(4, auto); justify-content: start; gap: 4px 22px; margin-top: 18px; }
+  .stats b { display: block; font: 400 28px/1 var(--serif-display); font-variant-numeric: tabular-nums; }
+  .stats span { font-size: 12px; color: var(--muted); }
+  .now { font: 420 17px/1.45 var(--serif); margin: 14px 0 0; min-height: 3em; }
+  .now em { font-style: normal; color: var(--accent); }
+  .now.bad { color: var(--rose); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .speed { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+  .legend i { display: inline-block; width: 14px; height: 14px; border: 2.5px solid #6C4487; border-radius: 3px; vertical-align: -2px; margin-right: 6px; background: #FBF8F1; }
+  .legend i.t { border: 0; background: linear-gradient(rgba(108,68,135,.2), rgba(108,68,135,.2)), #EDB7B9; }
+  .legend i.g { border-color: #A9802A; } .legend i.d { border-color: #B23A62; }
+  .log { margin: 0; padding: 0; list-style: none; font: 420 15.5px/1.45 var(--serif); }
+  .log li { display: grid; grid-template-columns: 2.8em 1fr; padding: 6px 0; border-top: 1px solid var(--line); }
+  .log li span { font: 500 12px/1.9 var(--sans); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .log li.guess { color: var(--gold); }
+  .log li.backtrack, .log li.contradiction, .log li.failed { color: var(--rose); }
+  .log li.blank { color: var(--muted); }
+  .log li.solved { color: var(--accent); }
+  .log-empty { font: 420 15.5px/1.45 var(--serif); color: var(--muted); margin: 0; }
+
+  /* Dialogs (flat, like the site: depth from color, not shadows) */
+  .overlay { position: fixed; inset: 0; background: var(--scrim); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+  .overlay.open { display: flex; }
+  .dialog { background: var(--panel); color: var(--ink); border-radius: 20px; width: min(720px, 100%); max-height: 100%; overflow: auto; padding: 24px 28px; box-shadow: inset 0 0 0 1px var(--line); }
+  .dialog h2 { margin: 0 0 8px; font: 400 30px/1.15 var(--serif-display); }
+  .dialog p { margin: 8px 0 14px; font: 420 17px/1.45 var(--serif); }
+  .dialog .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 16px; }
+  .help h3 { font: 500 12px/1.2 var(--sans); text-transform: uppercase; letter-spacing: .08em; color: var(--accent); margin: 22px 0 6px; }
+  .help ul, .help ol { margin: 4px 0; padding-left: 22px; }
+  .help li { margin: 4px 0; font: 420 17px/1.45 var(--serif); }
+  kbd { font: 500 12px var(--sans); background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; color: var(--ink); }
+  .levels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
+  .level { display: block; text-align: left; white-space: normal; border-radius: 18px; padding: 16px 18px; min-height: 0; background: var(--btn); line-height: 1.35; }
+  .level b { display: block; font: 400 22px/1.1 var(--serif-display); margin-bottom: 6px; }
+  .level span { display: block; font: 420 15.5px/1.4 var(--serif); color: var(--muted); }
+  .level small { display: block; font: 400 12px var(--sans); color: var(--muted); margin-top: 8px; }
+  .level.chosen:disabled { opacity: 1; box-shadow: inset 0 0 0 2px var(--accent); }
+  @media (max-width: 560px) { .levels { grid-template-columns: 1fr; } }
+  .working { display: flex; align-items: center; gap: 14px; margin-top: 18px; font: 420 17px/1.45 var(--serif); }
+  .working[hidden] { display: none; }
+  .spin { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.4s; } }
+  #toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px); background: var(--ink); color: var(--bg); padding: 11px 20px; border-radius: 999px; font-size: 14px; opacity: 0; transition: opacity .2s ease, transform .2s var(--ease-out); pointer-events: none; z-index: 20; max-width: calc(100% - 32px); text-align: center; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  @media (prefers-reduced-motion: reduce) { #toast { transform: translateX(-50%); } button:active:not(:disabled) { transform: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Star Battle Solver</h1>
+  <select id="exampleSel" aria-label="Load an example puzzle">
+    <option value="">Examples</option>
+    <option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option><option value="expert">Expert</option>
+  </select>
+  <button id="randomBtn"><span class="full">Random Puzzle</span><span class="short">Random</span></button>
+  <button id="openBtn">Open…</button>
+  <button id="saveBtn">Save…</button>
+  <input type="file" id="fileInput" accept=".txt,text/plain" hidden>
+  <div class="spacer"></div>
+  <button id="helpBtn">Help</button>
+  <button class="mode" id="mode" type="button" role="switch" aria-checked="true" aria-label="Dark mode">
+    <svg class="ico sun" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="currentColor"/><g stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 1.2v1.6M8 13.2v1.6M1.2 8h1.6M13.2 8h1.6M3.2 3.2l1.1 1.1M11.7 11.7l1.1 1.1M3.2 12.8l1.1-1.1M11.7 4.3l1.1-1.1"/></g></svg>
+    <svg class="ico moon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M13.6 10.4A6 6 0 0 1 5.6 2.4a6 6 0 1 0 8 8z"/></svg>
+    <span class="knob"><svg class="ico sun" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="currentColor"/><g stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 1.2v1.6M8 13.2v1.6M1.2 8h1.6M13.2 8h1.6M3.2 3.2l1.1 1.1M11.7 11.7l1.1 1.1M3.2 12.8l1.1-1.1M11.7 4.3l1.1-1.1"/></g></svg><svg class="ico moon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M13.6 10.4A6 6 0 0 1 5.6 2.4a6 6 0 1 0 8 8z"/></svg></span>
+  </button>
+</header>
+<main>
+  <div class="stage">
+    <svg class="board" id="board" viewBox="0 0 1000 1000" tabindex="0" role="img" aria-label="Star Battle board, 10 by 10"></svg>
+  </div>
+  <div class="side">
+    <div class="ctrl">
+      <section>
+        <p class="lbl"><span class="num">1</span>Paint the Regions</p>
+        <p class="hint">Pick a color, then tap or drag on the board. The eraser (or a right-click) clears cells.</p>
+        <div class="sw" id="swatches"></div>
+        <div class="between">
+          <span class="small">Stars per row, column and region</span>
+          <div class="seg" id="starsSeg" role="group" aria-label="Stars per row, column and region"><button data-v="1">1</button><button data-v="2">2</button></div>
+        </div>
+        <div class="row" style="margin-top:12px"><button id="clearBtn">Clear the Board</button></div>
+        <p class="issue" id="issue" aria-live="polite"></p>
+      </section>
+      <section>
+        <p class="lbl"><span class="num">2</span>Watch It Solve<span class="badge" id="badge"></span></p>
+        <div class="row"><button class="primary" id="solveBtn" style="flex-basis:100%">Solve</button></div>
+        <div class="row" style="margin-top:6px"><button id="stepBtn">One Step</button><button id="skipBtn">Skip to the End</button><button id="resetBtn">Reset</button></div>
+        <div style="margin-top:16px"><div class="speed"><label for="speed">Pause between steps</label><span id="speedVal">0.3 s</span></div><input type="range" id="speed" min="0" max="1500" step="50" value="300"></div>
+        <div class="stats"><div><b id="statSteps">0</b><span>Steps</span></div><div><b id="statGuesses">0</b><span>Guesses</span></div><div><b id="statBacktracks">0</b><span>Backtracks</span></div><div><b id="statLevel">0</b><span>Guess Level</span></div></div>
+        <p class="now" id="now" aria-live="polite"></p>
+        <div class="legend"><span><i class="t"></i>what the step is about</span><span><i></i>just changed</span><span><i class="g"></i>current guess</span><span><i class="d"></i>dead end</span></div>
+      </section>
+    </div>
+    <div class="steps">
+      <p class="lbl">Every Step</p>
+      <ol class="log" id="log"></ol>
+      <p class="log-empty" id="logEmpty">Each step the solver takes will be listed here, with its reason.</p>
+    </div>
+  </div>
+</main>
+
+<!-- Random puzzle -->
+<div class="overlay" id="randomDlg">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="randomTitle">
+    <h2 id="randomTitle">A New Random Puzzle</h2>
+    <p>Pick a difficulty. Every puzzle has exactly one answer (10&nbsp;×&nbsp;10, 2 stars), and is checked by solving it before you see it, so it really is the level you chose. The level is the widest reasoning the puzzle needs.</p>
+    <div class="levels" id="levels">
+      <button class="level" data-level="easy"><b>Easy</b><span>One or two rows, columns or regions at a time: Completed Sections, Rude Roommates, Nosy Neighbors.</span><small>Usually a few seconds; the rarest kind</small></button>
+      <button class="level" data-level="medium"><b>Medium</b><span>Two or more lines together: chunking, or No More Space and Too Much Space across several rows.</span><small>About a second</small></button>
+      <button class="level" data-level="hard"><b>Hard</b><span>A chain of what-ifs: follow a pretend star through several moves. No guessing.</span><small>About a second</small></button>
+      <button class="level" data-level="expert"><b>Expert</b><span>Logic alone gets stuck, so it takes trial and error, beyond what a contest would ask.</span><small>A second or two</small></button>
+    </div>
+    <div class="working" id="working" hidden><span class="spin" aria-hidden="true"></span><span id="workingText" aria-live="polite">Making a puzzle…</span></div>
+    <div class="actions"><button id="randomCancel">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Ask before solving split regions -->
+<div class="overlay" id="confirmDlg">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <h2 id="confirmTitle">Split Regions</h2>
+    <p id="confirmText"></p>
+    <div class="actions"><button id="confirmNo">Go Back</button><button id="confirmYes" class="primary">Solve Anyway</button></div>
+  </div>
+</div>
+
+<!-- Help -->
+<div class="overlay" id="helpDlg">
+  <div class="dialog help" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <h2 id="helpTitle">How to Use the Star Battle Solver</h2>
+    <h3>The Puzzle</h3>
+    <ul>
+      <li>The 10&nbsp;×&nbsp;10 board is split into 10 colored regions. Place stars so that every <b>row</b>, every <b>column</b> and every <b>region</b> has exactly 2 stars, and no two stars <b>touch</b>, not even corner to corner.</li>
+    </ul>
+    <h3>Getting a Puzzle</h3>
+    <ul>
+      <li><b>Examples</b> loads one of four ready-made puzzles, one at each difficulty.</li>
+      <li><b>Random Puzzle</b> makes a brand-new puzzle at the difficulty you pick.</li>
+      <li><b>Paint your own:</b> pick a color (A–J), then tap or drag on the board. The eraser, or a right-click, clears cells. Every cell needs a color, and a puzzle needs exactly 10 regions.</li>
+      <li><b>Save…</b> downloads the puzzle as a small text file; <b>Open…</b> loads one back (the same files the Python version uses).</li>
+    </ul>
+    <h3>Watching It Solve</h3>
+    <ul>
+      <li><b>Solve</b> plays the solution step by step (press again to pause); <b>One Step</b> goes one step at a time; <b>Skip to the End</b> jumps to the answer; <b>Reset</b> clears the stars. Every step is explained in the list.</li>
+      <li>The solver always tries the simplest reasoning first and only moves on when it's stuck. Rules 1–4 use the names from Carson's instruction manual for the Star Battles round of the 2022 Berkeley mini Math Tournament:
+        <ol>
+          <li><b>Counting.</b> <i>Completed Sections:</i> a row, column or region that already has its stars is crossed out; one with exactly enough open cells left gets stars in all of them.</li>
+          <li><b>No More Space</b> and <b>Too Much Space:</b> if 3 regions fit inside 3 rows, they use up all those rows' stars; if 3 rows touch only 3 regions, those rows fill them up.</li>
+          <li><b>Rude Roommates</b> and <b>Nosy Neighbors:</b> a star here would leave its own row, column or region (or a nearby one) without room for its stars, so it can't go here.</li>
+          <li><b>Chunking:</b> any 2×2 square holds at most one star, which limits how many stars two neighboring rows or columns can take.</li>
+          <li><b>Deep what-if:</b> pretend there's a star here and follow rules 1 and 2 forward; if that leads to a dead end, cross the cell out.</li>
+        </ol>
+      </li>
+      <li>Cells crossed out for the same reason are shown as one step, and the row, column or region the reason is about is tinted.</li>
+      <li>When all five rules are stuck, it <b>guesses</b> (gold box), and <b>undoes</b> the guess if it leads to a dead end (red box).</li>
+    </ul>
+    <h3>Difficulty</h3>
+    <ul>
+      <li>A puzzle's level is the <b>widest reasoning</b> it needs, meaning how much of the board you have to keep in mind at once. The solver always tries the simplest reasoning first, so the hardest rule it ever uses is the hardest one the puzzle needs.</li>
+      <li><b>Easy:</b> one or two rows, columns or regions at a time (Completed Sections, Rude Roommates, Nosy Neighbors, a squeeze inside one row). <b>Medium:</b> two or more lines together (chunking, or a squeeze across several rows). <b>Hard:</b> a chain of what-ifs, but no guessing. <b>Expert:</b> logic alone gets stuck, so the solver has to guess. The level shown beside “Watch It Solve” comes from solving the puzzle this way.</li>
+    </ul>
+    <h3>Keyboard Shortcuts</h3>
+    <ul>
+      <li><kbd>1</kbd>–<kbd>9</kbd> and <kbd>0</kbd> pick colors A–J · <kbd>E</kbd> eraser · <kbd>Space</kbd> solve or pause · <kbd>→</kbd> one step</li>
+      <li>On the board: arrow keys move, <kbd>Enter</kbd> paints, <kbd>Delete</kbd> erases.</li>
+    </ul>
+    <div class="actions"><button id="helpClose" class="primary">Got It</button></div>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+
+<script src="solver.js"></script>
+<script src="generator.js"></script>
+<script>
+'use strict';
+/* ================================================================
+   The page: painting the board, loading and saving puzzles, and
+   playing back the solver's steps. The solving, grading and puzzle
+   making happen in worker.js, so the page never freezes.
+   ================================================================ */
+const $ = id => document.getElementById(id);
+const SIZE = 10, LETTERS = 'ABCDEFGHIJ';
+// One soft color per region (A to J), the same in Night and Day: the board is paper.
+const COLORS = ['#EDB7B9', '#F1CDA4', '#EEE0A2', '#CBDAAE', '#AFD8D0', '#B6CBEA', '#CFBCE6', '#EEBFD8', '#DCCBAD', '#CBD0D8'];
+const EXAMPLES = {   // the files in puzzles/, graded by gradePuzzle (test_solver.py checks they match)
+  easy: 'BEEEAADDDG BAAAADDDGG BBAAAADDGG BBBBJADDDG JBBBJJGGGG JBJJJHHFGI JJJJHHHFII JJJJHHHFII JCJCCHHHII JCCCHHHIII',
+  medium: 'HHHHGGGJJJ HCHHGGGIII CCHCGGGIII CCCCGGGIII CCCCGGGEII FFFDDGGEII FDDDDDEEBI ADADDDBEBI AAAABBBBBB AAAAAABBBB',
+  hard: 'CCCCGGGGEE CCCCGJGGEE CCCCGJJJJE CCCCGGAJJE CCCAAAAABE HHFAAAAABB HHFFFFFBBB HHIIDDIIBB HIIDDDIIBB HIIIIIIIII',
+  expert: 'FFFFJJIIII FEFFJJJJII EEEEEJJJII ECCCJJJJAI CCCCJAJJAA DCCCHAAAAA DCCCHHHAAA DDDCBBHGGG DDDBBBHHHG DDDDBHHHHG',
+};
+const LEVEL_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard', expert: 'Expert' };
+const RULE_NAMES = { counting: 'Completed Sections', roommates: 'Rude Roommates', neighbors: 'Nosy Neighbors', 'squeeze-1': 'a squeeze inside one row or column',
+  'squeeze-2': 'a squeeze across two rows or columns', 'squeeze-wide': 'a squeeze across three or more rows or columns', chunking: 'Chunking', deep: 'a chain of what-ifs', guess: 'guessing' };
+const STORE_KEY = 'star-battle-puzzle';
+
+/* ---------------- The puzzle being edited ---------------- */
+let regions = blankRegions();      // regions[r][c] = 0-9 (A-J) or -1 (not painted yet)
+let stars = 2;
+let pick = 0;                      // selected color, or -1 for the eraser
+let cursor = [0, 0];               // keyboard position on the board
+let showCursor = false;
+
+/* ---------------- What the solver is showing ---------------- */
+let steps = null;                  // every step, worked out in the background
+let shown = 0;                     // how many steps are on screen
+let timer = null, running = false, solving = false;
+let grade = null;                  // the current puzzle's grade, once known
+
+function blankRegions() { return Array.from({ length: SIZE }, () => new Array(SIZE).fill(-1)); }
+function rowsOf(regs) { return regs.map(row => row.map(k => k < 0 ? '.' : LETTERS[k]).join('')); }   // '.' = not painted
+
+/* ================================================================
+   Background jobs (worker.js). One job at a time; a new job, or a
+   timeout, stops the old one. Without workers (a page opened as a
+   file), the same code runs directly instead.
+   ================================================================ */
+let worker = null;
+function runJob(job, onMessage, timeoutMs) {
+  stopJob();
+  let finished = false;
+  const done = msg => { if (finished) return; if (msg.type !== 'progress') { finished = true; stopJob(); } onMessage(msg); };
+  try {
+    worker = new Worker('worker.js');
+    worker.onmessage = e => done(e.data);
+    worker.onerror = e => { e.preventDefault(); if (!finished) runDirect(job, done); };
+    worker.postMessage(job);
+    if (timeoutMs) worker.timer = setTimeout(() => done({ type: 'error', message: 'timeout' }), timeoutMs);
+  } catch (e) {
+    runDirect(job, done);   // e.g. opened by double-clicking index.html
+  }
+}
+function stopJob() { if (worker) { clearTimeout(worker.timer); worker.terminate(); worker = null; } }
+function runDirect(job, done) {
+  stopJob();
+  setTimeout(() => {
+    try {
+      if (job.type === 'solve') {
+        const solver = new StarBattleSolver(job.rows, job.stars);
+        const list = [...solver.solveSteps()];
+        done({ type: 'solved', steps: list, guesses: solver.guesses, backtracks: solver.backtracks });
+      } else if (job.type === 'grade') {
+        done({ type: 'graded', grade: gradePuzzle(job.rows, job.stars) });
+      } else if (job.type === 'generate') {
+        const r = generateWithDifficulty(job.difficulty, { stars: job.stars });
+        done({ type: 'generated', rows: r.rows, grade: r.grade, tries: r.tries });
+      }
+    } catch (err) { done({ type: 'error', message: err.message }); }
+  }, 30);
+}
+
+/* ================================================================
+   Checking a painted puzzle before solving
+   ================================================================ */
+function connected(k) {
+  const cells = [];
+  for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) if (regions[r][c] === k) cells.push(r * SIZE + c);
+  const set = new Set(cells), seen = new Set([cells[0]]), todo = [cells[0]];
+  while (todo.length) {
+    const cell = todo.pop(), r = Math.floor(cell / SIZE), c = cell % SIZE;
+    for (const [nr, nc] of [[r + 1, c], [r - 1, c], [r, c + 1], [r, c - 1]]) {
+      const nb = nr * SIZE + nc;
+      if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE && set.has(nb) && !seen.has(nb)) { seen.add(nb); todo.push(nb); }
+    }
+  }
+  return seen.size === cells.length;
+}
+
+/** Problems that stop solving (blocking), and split regions (allowed after asking). */
+function checkPuzzle() {
+  const unpainted = regions.flat().filter(k => k < 0).length;
+  if (unpainted === SIZE * SIZE) return { block: 'The board is empty. Load an example, make a random puzzle, or paint your own.' };
+  if (unpainted) return { block: `${unpainted} ${unpainted === 1 ? 'cell still needs' : 'cells still need'} a color. Every cell belongs to a region.` };
+  const used = [...new Set(regions.flat())].sort((a, b) => a - b);
+  if (used.length !== SIZE) return { block: `A 10 × 10 puzzle needs exactly 10 regions, but this one has ${used.length}.` };
+  const small = used.filter(k => regions.flat().filter(x => x === k).length < stars);
+  if (small.length) return { block: `Region ${LETTERS[small[0]]} is too small to hold ${stars} stars.` };
+  const split = used.filter(k => !connected(k)).map(k => LETTERS[k]);
+  return { split };
+}
+
+/* ================================================================
+   Drawing the board (an SVG picture, 1000 x 1000 units)
+   ================================================================ */
+const CELL = 100, M = 6;   // M: room for the outer border
+const STAR_PATH = (() => {   // a five-pointed star centered on 0,0
+  const p = [];
+  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, d = i % 2 ? 13 : 31; p.push(`${(d * Math.cos(a)).toFixed(1)} ${(d * Math.sin(a)).toFixed(1)}`); }
+  return 'M' + p.join('L') + 'Z';
+})();
+
+function draw() {
+  const step = steps && shown ? steps[shown - 1] : null;
+  const marks = step ? step.grid : null;
+  const span = SIZE * CELL, scale = (1000 - 2 * M) / span;
+  let s = `<g transform="translate(${M} ${M}) scale(${scale})">`;
+  for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
+    const k = regions[r][c];
+    s += `<rect x="${c * CELL}" y="${r * CELL}" width="${CELL}" height="${CELL}" fill="${k < 0 ? '#FFFDF8' : COLORS[k]}" stroke="#d6ccbb" stroke-width="1.5"/>`;
+  }
+  // Thick walls between different regions, as in printed puzzles.
+  let walls = '';
+  for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
+    if (c + 1 < SIZE && regions[r][c] !== regions[r][c + 1]) walls += `M${(c + 1) * CELL} ${r * CELL}V${(r + 1) * CELL}`;
+    if (r + 1 < SIZE && regions[r][c] !== regions[r + 1][c]) walls += `M${c * CELL} ${(r + 1) * CELL}H${(c + 1) * CELL}`;
+  }
+  s += `<path d="${walls}" stroke="#1f1a14" stroke-width="6" stroke-linecap="square" fill="none"/>`;
+  s += `<rect x="0" y="0" width="${span}" height="${span}" fill="none" stroke="#1f1a14" stroke-width="${2 * M / scale}"/>`;
+  if (marks) {
+    // A soft plum tint over the row, column, region or pair of lines the step's reasoning is about.
+    if (step.action !== 'solved') for (const [r, c] of step.focus || []) {
+      s += `<rect x="${c * CELL}" y="${r * CELL}" width="${CELL}" height="${CELL}" fill="#6C4487" fill-opacity=".2"/>`;
+    }
+    for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
+      const cx = c * CELL + CELL / 2, cy = r * CELL + CELL / 2;
+      if (marks[r][c] === STAR) s += `<path d="${STAR_PATH}" transform="translate(${cx} ${cy})" fill="#1f1a14"/>`;
+      else if (marks[r][c] === BLANK) s += `<path d="M${cx - 11} ${cy - 11}L${cx + 11} ${cy + 11}M${cx + 11} ${cy - 11}L${cx - 11} ${cy + 11}" stroke="#8a8174" stroke-width="5" stroke-linecap="round"/>`;
+    }
+    // Boxes around the cells the latest step was about.
+    const color = step.action === 'guess' ? '#A9802A' : /backtrack|contradiction|failed/.test(step.action) ? '#B23A62' : '#6C4487';
+    if (step.action !== 'solved') for (const [r, c] of step.cells) {
+      s += `<rect x="${c * CELL + 10}" y="${r * CELL + 10}" width="${CELL - 20}" height="${CELL - 20}" rx="7" fill="none" stroke="${color}" stroke-width="7"/>`;
+    }
+  }
+  if (showCursor) {
+    const [r, c] = cursor;
+    s += `<rect x="${c * CELL + 4}" y="${r * CELL + 4}" width="${CELL - 8}" height="${CELL - 8}" rx="6" fill="none" stroke="#6C4487" stroke-width="5" stroke-dasharray="14 9"/>`;
+  }
+  $('board').innerHTML = s + '</g>';
+  $('board').setAttribute('aria-label', boardLabel());
+}
+function boardLabel() {
+  const painted = regions.flat().filter(k => k >= 0).length;
+  const starsShown = steps && shown ? steps[shown - 1].grid.flat().filter(x => x === STAR).length : 0;
+  return `Star Battle board, 10 by 10: ${painted} of 100 cells painted${starsShown ? `, ${starsShown} stars placed` : ''}.`;
+}
+
+/* ================================================================
+   Painting
+   ================================================================ */
+$('swatches').innerHTML = COLORS.map((color, k) => `<button style="background:${color}" data-k="${k}" aria-label="Region ${LETTERS[k]}" aria-pressed="false">${LETTERS[k]}</button>`).join('') +
+  `<button class="eraser" data-k="-1" aria-label="Eraser" aria-pressed="false" title="Eraser (E)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l10-10a1 1 0 0 1 1.4 0l5.6 5.6a1 1 0 0 1 0 1.4L11 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></button>`;
+function setPick(k) {
+  pick = k;
+  $('swatches').querySelectorAll('button').forEach(b => { const on = +b.dataset.k === k; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+}
+$('swatches').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setPick(+b.dataset.k); });
+
+function paintCell(r, c, value) {
+  if (regions[r][c] === value) return;
+  regions[r][c] = value;
+  puzzleChanged();
+}
+let painting = null;   // the value being painted while the pointer is down
+function cellAt(e) {
+  const box = $('board').getBoundingClientRect(), inner = box.width * (1 - 2 * M / 1000), off = box.width * M / 1000;
+  const c = Math.floor((e.clientX - box.left - off) / inner * SIZE), r = Math.floor((e.clientY - box.top - off) / inner * SIZE);
+  return r >= 0 && r < SIZE && c >= 0 && c < SIZE ? [r, c] : null;
+}
+$('board').addEventListener('pointerdown', e => {
+  if (e.button !== 0 && e.button !== 2) return;
+  painting = e.button === 2 ? -1 : pick;
+  $('board').setPointerCapture(e.pointerId);
+  showCursor = false;
+  const at = cellAt(e);
+  if (at) paintCell(at[0], at[1], painting);
+});
+$('board').addEventListener('pointermove', e => { if (painting === null) return; const at = cellAt(e); if (at) paintCell(at[0], at[1], painting); });
+['pointerup', 'pointercancel'].forEach(t => $('board').addEventListener(t, () => { painting = null; }));
+$('board').addEventListener('contextmenu', e => e.preventDefault());
+$('board').addEventListener('keydown', e => {
+  const moves = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+  if (moves[e.key]) {
+    e.preventDefault(); e.stopPropagation();
+    cursor = [Math.min(SIZE - 1, Math.max(0, cursor[0] + moves[e.key][0])), Math.min(SIZE - 1, Math.max(0, cursor[1] + moves[e.key][1]))];
+    showCursor = true; draw();
+  } else if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault(); e.stopPropagation(); showCursor = true; paintCell(cursor[0], cursor[1], pick); draw();
+  } else if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.preventDefault(); showCursor = true; paintCell(cursor[0], cursor[1], -1); draw();
+  }
+});
+$('board').addEventListener('focus', () => { if (!painting) { showCursor = true; draw(); } });
+$('board').addEventListener('blur', () => { showCursor = false; draw(); });
+
+/** Anything about the puzzle changed: forget the old solution and re-check it. */
+function puzzleChanged(knownGrade) {
+  resetSolver();
+  grade = knownGrade || null;
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ rows: rowsOf(regions), stars })); } catch (e) {}
+  showChecks();
+  draw();
+  if (!knownGrade) scheduleGrade();
+}
+
+let gradeTimer = null;
+function scheduleGrade() {
+  clearTimeout(gradeTimer);
+  const check = checkPuzzle();
+  if (check.block) return;
+  gradeTimer = setTimeout(() => {
+    const rows = rowsOf(regions), forStars = stars;
+    runJob({ type: 'grade', rows, stars: forStars }, msg => {
+      if (msg.type === 'graded' && rowsOf(regions).join() === rows.join() && stars === forStars) { grade = msg.grade; showChecks(); }
+    }, 15000);
+  }, 500);
+}
+
+/** The badge and the line under the swatches: what's wrong, or how hard the puzzle is. */
+function showChecks() {
+  const check = checkPuzzle(), badge = $('badge');
+  let issue = check.block || '';
+  badge.className = 'badge';
+  badge.textContent = '';
+  badge.title = '';
+  if (!check.block && check.split.length) issue = `Region${check.split.length > 1 ? 's' : ''} ${check.split.join(', ')} ${check.split.length > 1 ? 'are' : 'is'} split into separate pieces. That's unusual, but you can still solve it.`;
+  if (!check.block && grade) {
+    if (grade.solutions === 0) { badge.textContent = 'No Answer'; badge.classList.add('warn'); issue = issue || 'This puzzle has no answer: no way to place the stars follows every rule. The solver will show where it gets stuck.'; }
+    else if (grade.solutions > 1) { badge.textContent = 'Several Answers'; badge.classList.add('warn'); issue = issue || 'This puzzle has more than one answer, so the solver will find one of them.'; }
+    else { badge.textContent = LEVEL_NAMES[grade.difficulty]; badge.title = `Hardest reasoning needed: ${RULE_NAMES[grade.hardestRule] || grade.hardestRule}`; }
+  }
+  $('issue').textContent = issue;
+}
+
+/* ================================================================
+   Loading, saving and making puzzles
+   ================================================================ */
+/** Rows of any 10 symbols -> regions A-J (in sorted order), like the Python version. */
+function setPuzzle(rows, newStars, knownGrade) {
+  if (rows.length !== SIZE || rows.some(r => r.length !== SIZE)) throw new Error('A puzzle must be 10 rows of 10 cells.');
+  const symbols = [...new Set(rows.join(''))].sort();
+  if (symbols.length > SIZE) throw new Error(`The puzzle uses ${symbols.length} different region symbols; at most 10 are allowed.`);
+  regions = rows.map(row => [...row].map(ch => symbols.indexOf(ch)));
+  if (newStars) setStars(newStars, true);
+  puzzleChanged(knownGrade);
+}
+
+$('exampleSel').addEventListener('change', e => {
+  const level = e.target.value;
+  e.target.value = '';
+  if (!level) return;
+  setPuzzle(EXAMPLES[level].split(' '), 2);
+  $('now').textContent = `The ${LEVEL_NAMES[level].toLowerCase()} example. Press Solve to watch it work.`;
+});
+
+$('openBtn').onclick = () => $('fileInput').click();
+$('fileInput').addEventListener('change', () => {
+  const file = $('fileInput').files[0];
+  if (!file) return;
+  file.text().then(text => {
+    setPuzzle(parsePuzzle(text));
+    $('now').textContent = `Opened ${file.name}. Press Solve to watch it work.`;
+  }).catch(err => toast(`Couldn't open that file: ${err.message}`)).finally(() => { $('fileInput').value = ''; });
+});
+
+$('saveBtn').onclick = () => {
+  if (regions.flat().some(k => k < 0)) { toast('Paint every cell before saving.'); return; }
+  const text = '# Star Battle puzzle saved from the Star Battle Solver web app\n' + rowsOf(regions).join('\n') + '\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  a.download = 'star-battle-puzzle.txt';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast('Saved. Use “Open…” to load it again later.');
+};
+
+$('clearBtn').onclick = () => { regions = blankRegions(); puzzleChanged(); $('now').textContent = 'Paint your regions, then press Solve.'; };
+
+function setStars(n, quiet) {
+  stars = n;
+  $('starsSeg').querySelectorAll('button').forEach(b => { const on = +b.dataset.v === n; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+  if (!quiet) puzzleChanged();
+}
+$('starsSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b && +b.dataset.v !== stars) setStars(+b.dataset.v); });
+
+// Random puzzles at a chosen difficulty
+let lastFocus = null;
+function openDialog(id) { lastFocus = document.activeElement; $(id).classList.add('open'); ($(id).querySelector('.primary, .level, button') || $(id)).focus(); }
+function closeDialog(id) { $(id).classList.remove('open'); if (lastFocus) lastFocus.focus(); }
+$('randomBtn').onclick = () => { $('working').hidden = true; $('levels').querySelectorAll('button').forEach(b => { b.disabled = false; b.classList.remove('chosen'); }); openDialog('randomDlg'); };
+$('levels').addEventListener('click', e => {
+  const b = e.target.closest('.level');
+  if (!b) return;
+  const level = b.dataset.level, started = Date.now();
+  $('levels').querySelectorAll('button').forEach(x => { x.disabled = true; x.classList.toggle('chosen', x === b); });
+  $('working').hidden = false;
+  $('workingText').textContent = `Making ${article(level)} ${level} puzzle…`;
+  runJob({ type: 'generate', difficulty: level, stars: 2 }, msg => {
+    if (msg.type === 'progress') {
+      const secs = Math.round((Date.now() - started) / 1000);
+      $('workingText').textContent = `Making ${article(level)} ${level} puzzle… checked ${msg.tries} ${msg.tries === 1 ? 'candidate' : 'candidates'}${secs >= 2 ? ` in ${secs} s` : ''}`;
+      return;
+    }
+    closeDialog('randomDlg');
+    if (msg.type === 'generated') {
+      setPuzzle(msg.rows, 2, msg.grade);
+      $('now').textContent = `A new ${level} puzzle, with exactly one answer. Press Solve to watch it work.`;
+    } else {
+      toast(msg.message === 'timeout' ? 'That took too long. Please try again.' : msg.message);
+    }
+  }, 120000);
+});
+function article(word) { return /^[aeiou]/.test(word) ? 'an' : 'a'; }
+$('randomCancel').onclick = () => { stopJob(); closeDialog('randomDlg'); };
+
+/* ================================================================
+   Watching it solve
+   ================================================================ */
+/** Tidy the solver's wording for the page: "1 star(s)" -> "1 star", American spelling. */
+function tidy(text) {
+  return text
+    .replace(/(\d+) ((?:more |open )?)(star|cell|region)\(s\)/g, (_, n, between, word) => `${n} ${between}${word}${n === '1' ? '' : 's'}`)
+    .replace(/region\(s\) ([A-J])(?!, [A-J]\b)/g, 'region $1')   // just one region named
+    .replace(/exactly 1 open cell left, so they all get stars \(and their neighbours/g, 'exactly 1 open cell left, so it gets a star (and its neighbours')
+    .replace(/(\d+)-(\d+)/g, '$1–$2')
+    .replace(/region ([A-J]) fit entirely inside ([^,]+), so they use/g, 'region $1 fits entirely inside $2, so it uses')
+    .replace(/from region ([A-J]), which fills those regions up\. Their cells/g, 'from region $1, which fills it up. Its cells')
+    .replace(/region\(s\)/g, 'regions')
+    .replace(/needs 1 more star but there's no room for them/g, "needs 1 more star but there's no room for it")
+    .replace(/its other 1 star\b/g, 'its other star').replace(/for the 1 star it still needs/g, 'for the star it still needs')
+    .replace(/2x2/g, '2×2')
+    .replace(/neighbours/g, 'neighbors').replace(/go round/g, 'go around')
+    .replace(/ - /g, ' — ');
+}
+
+function startSolving(then) {
+  const check = checkPuzzle();
+  if (check.block) { $('now').textContent = ''; $('issue').textContent = check.block; flashIssue(); return; }
+  if (check.split.length && !then.confirmed) {
+    $('confirmText').textContent = `Region${check.split.length > 1 ? 's' : ''} ${check.split.join(', ')} ${check.split.length > 1 ? 'are' : 'is'} split into separate pieces. That's unusual for Star Battle. Solve anyway?`;
+    pendingSolve = then;
+    openDialog('confirmDlg');
+    return;
+  }
+  solving = true;
+  updateButtons();
+  $('now').classList.remove('bad');
+  $('now').textContent = 'Working it out…';
+  const rows = rowsOf(regions);
+  runJob({ type: 'solve', rows, stars }, msg => {
+    solving = false;
+    if (msg.type === 'solved') { steps = msg.steps; shown = 0; then(); }
+    else {
+      $('now').classList.add('bad');
+      $('now').textContent = msg.message === 'timeout'
+        ? 'This puzzle is taking too long to solve, so the solver stopped. Please check the regions.'
+        : msg.message;
+      updateButtons();
+    }
+  }, 30000);
+}
+let pendingSolve = null;
+$('confirmNo').onclick = () => { pendingSolve = null; closeDialog('confirmDlg'); };
+$('confirmYes').onclick = () => { closeDialog('confirmDlg'); const then = pendingSolve; pendingSolve = null; if (then) { then.confirmed = true; startSolving(then); } };
+function flashIssue() { const el = $('issue'); el.animate?.([{ opacity: .35 }, { opacity: 1 }], { duration: 300, easing: 'ease-out' }); }
+
+/** Show steps up to `n`, adding their lines to the list. */
+function showUpTo(n) {
+  const from = shown;
+  shown = Math.min(n, steps.length);
+  if (shown > from) {
+    $('log').insertAdjacentHTML('beforeend', steps.slice(from, shown).map((s, i) => `<li class="${s.action}"><span>${from + i + 1}</span>${tidy(s.message)}</li>`).join(''));
+    $('logEmpty').hidden = true;
+    // Keep the newest step in view when the list has its own scroll bar (wide screens).
+    const list = $('log').closest('.steps');
+    if (getComputedStyle(list).overflowY === 'auto') list.scrollTop = list.scrollHeight;
+  }
+  const s = steps[shown - 1];
+  const upTo = steps.slice(0, shown);
+  $('statSteps').textContent = shown;
+  $('statGuesses').textContent = upTo.filter(x => x.action === 'guess').length;
+  $('statBacktracks').textContent = upTo.filter(x => x.action === 'backtrack').length;
+  $('statLevel').textContent = s.depth;
+  $('now').classList.toggle('bad', s.action === 'failed');
+  $('now').innerHTML = `<em>Step ${shown}.</em> ${escapeHtml(tidy(s.message))}`;
+  draw();
+  updateButtons();
+  if (shown >= steps.length) finish();
+}
+function escapeHtml(t) { return t.replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[ch]); }
+
+function play() {
+  if (!running) return;
+  if (shown >= steps.length) { finish(); return; }
+  showUpTo(shown + 1);
+  if (running) timer = setTimeout(play, +$('speed').value);
+}
+function pause() { running = false; clearTimeout(timer); updateButtons(); }
+function finish() { running = false; clearTimeout(timer); updateButtons(); }
+
+$('solveBtn').onclick = () => {
+  if (solving) return;
+  if (running) { pause(); return; }
+  const go = () => { if (shown >= steps.length) { clearLog(); shown = 0; } running = true; updateButtons(); play(); };
+  if (steps) go(); else startSolving(go);
+};
+$('stepBtn').onclick = () => {
+  if (solving) return;
+  pause();
+  const one = () => showUpTo(shown + 1);
+  if (steps && shown < steps.length) one(); else if (!steps) startSolving(one);
+};
+$('skipBtn').onclick = () => {
+  if (solving) return;
+  pause();
+  const all = () => showUpTo(steps.length);
+  if (steps) all(); else startSolving(all);
+};
+$('resetBtn').onclick = () => { resetSolver(); draw(); $('now').textContent = 'Press Solve to watch it work.'; };
+$('speed').addEventListener('input', e => { const v = +e.target.value; $('speedVal').textContent = v === 0 ? 'none' : `${(v / 1000).toFixed(v % 100 ? 2 : 1)} s`; });
+
+function clearLog() { $('log').innerHTML = ''; $('logEmpty').hidden = false; }
+function resetSolver() {
+  pause(); stopJob(); solving = false;
+  steps = null; shown = 0;
+  clearLog();
+  ['statSteps', 'statGuesses', 'statBacktracks', 'statLevel'].forEach(id => $(id).textContent = 0);
+  $('now').classList.remove('bad');
+  updateButtons();
+}
+function updateButtons() {
+  const done = steps && shown >= steps.length;
+  $('solveBtn').textContent = solving ? 'Working…' : running ? 'Pause' : done ? 'Solve Again' : shown ? 'Resume' : 'Solve';
+  $('stepBtn').disabled = $('skipBtn').disabled = !!done;
+  $('resetBtn').disabled = !shown;
+}
+
+/* ================================================================
+   Help, keyboard shortcuts, messages
+   ================================================================ */
+$('helpBtn').onclick = () => openDialog('helpDlg');
+$('helpClose').onclick = () => closeDialog('helpDlg');
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => {
+  if (e.target !== o) return;
+  if (o.id === 'randomDlg') stopJob();
+  closeDialog(o.id);
+}));
+document.addEventListener('keydown', e => {
+  const open = document.querySelector('.overlay.open');
+  if (open) { if (e.key === 'Escape') { if (open.id === 'randomDlg') stopJob(); closeDialog(open.id); } return; }
+  if (e.metaKey || e.ctrlKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+  const i = '1234567890'.indexOf(e.key);
+  if (i >= 0) setPick(i);
+  else if (e.key === 'e' || e.key === 'E') setPick(-1);
+  else if (e.key === ' ' && e.target.tagName !== 'BUTTON') { e.preventDefault(); $('solveBtn').click(); }
+  else if (e.key === 'ArrowRight' && e.target !== $('board')) { e.preventDefault(); $('stepBtn').click(); }
+});
+let toastTimer = null;
+function toast(text) { const t = $('toast'); t.textContent = text; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3200); }
+
+/* ================================================================
+   Night and Day (the same switch, setting and animation as on
+   carsonmit.github.io: a circle of the new colors spreads from the
+   switch). The board stays on paper.
+   ================================================================ */
+(() => {
+  const root = document.documentElement, btn = $('mode'), meta = document.querySelector('meta[name="theme-color"]');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  const show = () => {
+    const day = root.dataset.theme === 'day';
+    btn.setAttribute('aria-checked', day ? 'false' : 'true');
+    meta.content = day ? '#F3EBDD' : '#151a21';
+  };
+  const apply = t => { root.dataset.theme = t; show(); try { localStorage.setItem('theme', t); } catch (e) {} };
+  show();
+  btn.addEventListener('click', () => {
+    const next = root.dataset.theme === 'day' ? 'night' : 'day';
+    if (!document.startViewTransition) {   // older browsers: fade the colors together
+      root.classList.add('fade'); apply(next); setTimeout(() => root.classList.remove('fade'), 350); return;
+    }
+    root.classList.add('vt');
+    if (reduce.matches) {                   // reduced motion: one gentle crossfade
+      root.classList.add('vt-fade');
+      document.startViewTransition(() => apply(next)).finished.finally(() => root.classList.remove('vt', 'vt-fade'));
+      return;
+    }
+    const r = btn.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const w = innerWidth, h = innerHeight;
+    const end = Math.hypot(Math.max(x, w - x), Math.max(y, h - y)) / (Math.hypot(w, h) / Math.SQRT2) * 100;
+    const at = `at ${x / w * 100}% ${y / h * 100}%`;
+    const vt = document.startViewTransition(() => apply(next));
+    vt.ready.then(() => root.animate(
+      { clipPath: [`circle(0% ${at})`, `circle(${end}% ${at})`] },
+      { duration: 560, easing: 'cubic-bezier(0.77, 0, 0.175, 1)', pseudoElement: '::view-transition-new(root)' }
+    ));
+    vt.finished.finally(() => root.classList.remove('vt'));
+  });
+  addEventListener('storage', e => { if (e.key === 'theme') { root.dataset.theme = e.newValue === 'day' ? 'day' : 'night'; show(); } });
+})();
+
+/* ---------------- Start: the last puzzle you had, or the easy example ---------------- */
+setPick(0);
+setStars(2, true);
+try {
+  const saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+  if (saved && saved.rows) { regions = saved.rows.map(row => [...row].map(ch => LETTERS.indexOf(ch))); setStars(saved.stars || 2, true); puzzleChanged(); }
+  else throw 0;
+} catch (e) { setPuzzle(EXAMPLES.easy.split(' '), 2); }
+$('now').textContent = $('now').textContent || 'Press Solve to watch it work.';
+updateButtons();
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

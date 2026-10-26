@@ -1,9 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#ffffff"/>
-  <path d="M168 256 H312" stroke="#1d1d1f" stroke-width="16"/>
-  <path d="M352 256 L300 228 L312 256 L300 284 Z" fill="#1d1d1f"/>
-  <circle cx="122" cy="256" r="58" fill="#bfbfbf" stroke="#1d1d1f" stroke-width="12"/>
-  <circle cx="404" cy="256" r="58" fill="#ffffff" stroke="#1d1d1f" stroke-width="12"/>
-  <text x="122" y="276" text-anchor="middle" font-family="Times New Roman, Times, serif" font-style="italic" font-size="64" fill="#1d1d1f">c</text>
-  <text x="404" y="276" text-anchor="middle" font-family="Times New Roman, Times, serif" font-style="italic" font-size="64" fill="#1d1d1f">e</text>
+<style>.night{display:none} @media (prefers-color-scheme: dark){.day{display:none} .night{display:inline}}</style>
+<g class="day"><rect width="512" height="512" rx="112" fill="#F3EBDD"/><path d="M206 256 H300" stroke="#1f1a14" stroke-width="34"/><path d="M334 256 L284 226 L296 256 L284 286 Z" fill="#1f1a14"/><circle cx="126" cy="256" r="76" fill="#6C4487" stroke="#1f1a14" stroke-width="30"/><circle cx="400" cy="256" r="76" fill="#F3EBDD" stroke="#1f1a14" stroke-width="30"/></g>
+<g class="night"><rect width="512" height="512" rx="112" fill="#151a21"/><path d="M206 256 H300" stroke="#C9ACDE" stroke-width="34"/><path d="M334 256 L284 226 L296 256 L284 286 Z" fill="#C9ACDE"/><circle cx="126" cy="256" r="76" fill="#C9ACDE" stroke="#C9ACDE" stroke-width="30"/><circle cx="400" cy="256" r="76" fill="#151a21" stroke="#C9ACDE" stroke-width="30"/></g>
 </svg>

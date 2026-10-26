@@ -1,13 +1,13 @@
-# Medium - logic gets stuck a few times, so the solver has to guess.
+# Medium - needs a squeeze across two rows (No More Space / Too Much Space) or chunking.
 # 10x10, 2 stars per row / column / region.
 # Each letter is the region that cell belongs to.
-BBBBBBBIII
-DBBBBFFIII
-DJJBBFFFII
-DDJEEEEAII
-DJJEEAAAAG
-DJJJEEAAAG
-HHJAAAAAAG
-HHJJCAAGGG
-HHHJCCACGG
-HHCCCCCCGG
+HHHHGGGJJJ
+HCHHGGGIII
+CCHCGGGIII
+CCCCGGGIII
+CCCCGGGEII
+FFFDDGGEII
+FDDDDDEEBI
+ADADDDBEBI
+AAAABBBBBB
+AAAAAABBBB

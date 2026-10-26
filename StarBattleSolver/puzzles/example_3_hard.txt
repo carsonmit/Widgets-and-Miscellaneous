@@ -1,13 +1,13 @@
-# Hard - needs lots of guessing and backtracking. Fun to watch!
+# Hard - needs a chain of what-ifs (follow a pretend star through several moves), but no guessing.
 # 10x10, 2 stars per row / column / region.
 # Each letter is the region that cell belongs to.
-FFFFJJIIII
-FEFFJJJJII
-EEEEEJJJII
-ECCCJJJJAI
-CCCCJAJJAA
-DCCCHAAAAA
-DCCCHHHAAA
-DDDCBBHGGG
-DDDBBBHHHG
-DDDDBHHHHG
+CCCCGGGGEE
+CCCCGJGGEE
+CCCCGJJJJE
+CCCCGGAJJE
+CCCAAAAABE
+HHFAAAAABB
+HHFFFFFBBB
+HHIIDDIIBB
+HIIDDDIIBB
+HIIIIIIIII
