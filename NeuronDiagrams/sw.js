@@ -1,7 +1,7 @@
 // Lets the app open without an internet connection once it has been visited.
 // Always tries the network first so updates show up straight away.
 const CACHE = 'neuron-diagrams-v2';
-const FILES = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-512.png'];
+const FILES = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));

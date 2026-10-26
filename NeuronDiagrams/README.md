@@ -66,5 +66,6 @@ Double-clicking `index.html` on a Mac or PC opens a fully working copy in the br
 | File | Purpose |
 |---|---|
 | `index.html` | the whole app (HTML, CSS and JavaScript; the only outside files are three free Google Fonts) |
-| `manifest.webmanifest`, `icon*.png`, `icon.svg` | name and icon for "Add to Home Screen" |
+| `manifest.webmanifest`, `icon-180.png`, `icon-512.png`, `icon-maskable-512.png` | name and home-screen icon for "Add to Home Screen" (cream; the maskable copy has extra margin for Android's round icons) |
+| `icon.svg` | browser-tab icon: cream in a light browser, charcoal in a dark one |
 | `sw.js` | service worker that caches the app for offline use |
