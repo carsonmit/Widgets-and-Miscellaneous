@@ -1,6 +1,6 @@
 // Lets the app open without an internet connection once it has been visited.
 // Always tries the network first so updates show up straight away.
-const CACHE = 'star-battle-v1';
+const CACHE = 'star-battle-v2';
 const FILES = ['./', './index.html', './solver.js', './generator.js', './worker.js', './manifest.webmanifest',
   './icon.svg', './icon-180.png', './icon-512.png', './icon-maskable-512.png'];
 

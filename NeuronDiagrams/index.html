@@ -16,9 +16,11 @@
   // Night by default; Day if you picked it here or on carsonmit.github.io (they share the setting).
   try { if (localStorage.getItem('theme') === 'day') document.documentElement.dataset.theme = 'day'; } catch (e) {}
 </script>
+<!-- display=optional: the site's fonts are used only if they arrive almost at once (visitors coming from the
+     website already have them), so the page never jumps when they load; otherwise a similar built-in font stays for that visit. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&family=IBM+Plex+Sans:wght@400;500&display=optional">
 <style>
   /* Colors and fonts match carsonmit.github.io (its DESIGN.md): charcoal and lilac by night (the default),
      cream and plum by day. The drawing itself always sits on paper, black on white, exactly as it exports. */

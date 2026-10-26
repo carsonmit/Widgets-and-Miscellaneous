@@ -8,6 +8,11 @@ Versions 0.1.0 to 0.4.0 were reconstructed from the git history on 2026-10-26; t
 
 ## [Unreleased]
 
+### Fixed
+- Both apps no longer jump around while loading (on phones the Star Battle Solver's top bar re-wrapped when the
+  fonts arrived): the site's fonts are used only if they arrive almost at once, which they do for visitors coming
+  from carsonmit.github.io. The offline copies were refreshed.
+
 ## [0.5.0] - 2026-10-26
 
 ### Changed
