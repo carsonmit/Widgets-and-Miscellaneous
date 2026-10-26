@@ -23,9 +23,6 @@ Versions 0.1.0 to 0.4.0 were reconstructed from the git history on 2026-10-26; t
   `example_2_medium.txt`, the medium one generated earlier is `example_3_hard.txt`, the old hard one is
   `example_4_expert.txt`, and a new easy one was generated and checked.
 
-### Fixed
-- Star Battle Solver: the squeeze rule (No More Space / Too Much Space) never looked at bands that include the last row
-  or column, so it sometimes explained a wide band (rows 1–8) instead of the obvious narrow one (rows 9–10).
 - Neuron Diagram Maker now has the look of [carsonmit.github.io](https://carsonmit.github.io): the site's colors
   (charcoal and lilac by night, cream and plum by day) and fonts, rounded pill buttons, and the site's sun/moon
   Night/Day switch, which shares its setting with the website. The drawing stays black on paper, and exports are unchanged.
@@ -34,6 +31,10 @@ Versions 0.1.0 to 0.4.0 were reconstructed from the git history on 2026-10-26; t
 - Neuron Diagram Maker: on phones the top bar fits in two rows.
 - Neuron Diagram Maker has a new icon, designed as a pair with the Star Battle Solver's: neuron c firing into e.
   Home screens show the cream version; the browser tab shows cream in a light browser and charcoal in a dark one.
+
+### Fixed
+- Star Battle Solver: the squeeze rule (No More Space / Too Much Space) never looked at bands that include the last row
+  or column, so it sometimes explained a wide band (rows 1–8) instead of the obvious narrow one (rows 9–10).
 
 ### Added
 - Star Battle Solver is now a web app (`StarBattleSolver/index.html`) for computers, tablets and phones, in the
