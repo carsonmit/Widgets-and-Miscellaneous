@@ -146,6 +146,7 @@
   .speed { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
   .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--muted); margin-top: 10px; }
   .legend i { display: inline-block; width: 14px; height: 14px; border: 2.5px solid #6C4487; border-radius: 3px; vertical-align: -2px; margin-right: 6px; background: #FBF8F1; }
+  .legend i.t { border: 0; background: linear-gradient(rgba(108,68,135,.2), rgba(108,68,135,.2)), #EDB7B9; }
   .legend i.g { border-color: #A9802A; } .legend i.d { border-color: #B23A62; }
   .log { margin: 0; padding: 0; list-style: none; font: 420 15.5px/1.45 var(--serif); }
   .log li { display: grid; grid-template-columns: 2.8em 1fr; padding: 6px 0; border-top: 1px solid var(--line); }
@@ -227,7 +228,7 @@
         <div style="margin-top:16px"><div class="speed"><label for="speed">Pause between steps</label><span id="speedVal">0.3 s</span></div><input type="range" id="speed" min="0" max="1500" step="50" value="300"></div>
         <div class="stats"><div><b id="statSteps">0</b><span>Steps</span></div><div><b id="statGuesses">0</b><span>Guesses</span></div><div><b id="statBacktracks">0</b><span>Backtracks</span></div><div><b id="statLevel">0</b><span>Guess Level</span></div></div>
         <p class="now" id="now" aria-live="polite"></p>
-        <div class="legend"><span><i></i>just changed</span><span><i class="g"></i>current guess</span><span><i class="d"></i>dead end</span></div>
+        <div class="legend"><span><i class="t"></i>what the step is about</span><span><i></i>just changed</span><span><i class="g"></i>current guess</span><span><i class="d"></i>dead end</span></div>
       </section>
     </div>
     <div class="steps">
@@ -242,12 +243,12 @@
 <div class="overlay" id="randomDlg">
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="randomTitle">
     <h2 id="randomTitle">A New Random Puzzle</h2>
-    <p>Pick a difficulty. Every puzzle has exactly one answer (10&nbsp;×&nbsp;10, 2 stars), and is checked by solving it before you see it, so it really is the level you chose.</p>
+    <p>Pick a difficulty. Every puzzle has exactly one answer (10&nbsp;×&nbsp;10, 2 stars), and is checked by solving it before you see it, so it really is the level you chose. The level is the widest reasoning the puzzle needs.</p>
     <div class="levels" id="levels">
-      <button class="level" data-level="easy"><b>Easy</b><span>No guessing. The three simplest rules are enough: counting, squeeze and quick what-ifs.</span><small>Ready in about a second</small></button>
-      <button class="level" data-level="medium"><b>Medium</b><span>No guessing, but you have to follow a what-if through several moves.</span><small>Ready in about a second</small></button>
-      <button class="level" data-level="hard"><b>Hard</b><span>All four rules get stuck, so the solver has to guess, one guess at a time.</span><small>A few seconds</small></button>
-      <button class="level" data-level="expert"><b>Expert</b><span>The solver has to guess while already inside a guess.</span><small>Can take up to half a minute</small></button>
+      <button class="level" data-level="easy"><b>Easy</b><span>One or two rows, columns or regions at a time: Completed Sections, Rude Roommates, Nosy Neighbors.</span><small>Usually a few seconds; the rarest kind</small></button>
+      <button class="level" data-level="medium"><b>Medium</b><span>Two or more lines together: chunking, or No More Space and Too Much Space across several rows.</span><small>About a second</small></button>
+      <button class="level" data-level="hard"><b>Hard</b><span>A chain of what-ifs: follow a pretend star through several moves. No guessing.</span><small>About a second</small></button>
+      <button class="level" data-level="expert"><b>Expert</b><span>Logic alone gets stuck, so it takes trial and error, beyond what a contest would ask.</span><small>A second or two</small></button>
     </div>
     <div class="working" id="working" hidden><span class="spin" aria-hidden="true"></span><span id="workingText" aria-live="polite">Making a puzzle…</span></div>
     <div class="actions"><button id="randomCancel">Cancel</button></div>
@@ -281,19 +282,22 @@
     <h3>Watching It Solve</h3>
     <ul>
       <li><b>Solve</b> plays the solution step by step (press again to pause); <b>One Step</b> goes one step at a time; <b>Skip to the End</b> jumps to the answer; <b>Reset</b> clears the stars. Every step is explained in the list.</li>
-      <li>The solver tries its simplest rule first and only moves on when it's stuck:
+      <li>The solver always tries the simplest reasoning first and only moves on when it's stuck. Rules 1–4 use the names from Carson's instruction manual for the Star Battles round of the 2022 Berkeley mini Math Tournament:
         <ol>
-          <li><b>Counting:</b> a row, column or region that is full, or has exactly enough room left.</li>
-          <li><b>Squeeze:</b> if 3 regions sit inside 3 rows, they use up all those rows' stars.</li>
-          <li><b>Quick what-if:</b> would a star here leave some row, column or region without room?</li>
+          <li><b>Counting.</b> <i>Completed Sections:</i> a row, column or region that already has its stars is crossed out; one with exactly enough open cells left gets stars in all of them.</li>
+          <li><b>No More Space</b> and <b>Too Much Space:</b> if 3 regions fit inside 3 rows, they use up all those rows' stars; if 3 rows touch only 3 regions, those rows fill them up.</li>
+          <li><b>Rude Roommates</b> and <b>Nosy Neighbors:</b> a star here would leave its own row, column or region (or a nearby one) without room for its stars, so it can't go here.</li>
+          <li><b>Chunking:</b> any 2×2 square holds at most one star, which limits how many stars two neighboring rows or columns can take.</li>
           <li><b>Deep what-if:</b> pretend there's a star here and follow rules 1 and 2 forward; if that leads to a dead end, cross the cell out.</li>
         </ol>
       </li>
-      <li>When all four are stuck, it <b>guesses</b> (yellow box), and <b>undoes</b> the guess if it leads to a dead end (red box).</li>
+      <li>Cells crossed out for the same reason are shown as one step, and the row, column or region the reason is about is tinted.</li>
+      <li>When all five rules are stuck, it <b>guesses</b> (gold box), and <b>undoes</b> the guess if it leads to a dead end (red box).</li>
     </ul>
     <h3>Difficulty</h3>
     <ul>
-      <li><b>Easy:</b> rules 1–3 are enough. <b>Medium:</b> needs rule 4. <b>Hard:</b> needs guessing, one guess at a time. <b>Expert:</b> needs a guess inside a guess. The level shown beside “Watch It Solve” comes from solving the puzzle this way.</li>
+      <li>A puzzle's level is the <b>widest reasoning</b> it needs, meaning how much of the board you have to keep in mind at once. The solver always tries the simplest reasoning first, so the hardest rule it ever uses is the hardest one the puzzle needs.</li>
+      <li><b>Easy:</b> one or two rows, columns or regions at a time (Completed Sections, Rude Roommates, Nosy Neighbors, a squeeze inside one row). <b>Medium:</b> two or more lines together (chunking, or a squeeze across several rows). <b>Hard:</b> a chain of what-ifs, but no guessing. <b>Expert:</b> logic alone gets stuck, so the solver has to guess. The level shown beside “Watch It Solve” comes from solving the puzzle this way.</li>
     </ul>
     <h3>Keyboard Shortcuts</h3>
     <ul>
@@ -319,12 +323,14 @@ const SIZE = 10, LETTERS = 'ABCDEFGHIJ';
 // One soft color per region (A to J), the same in Night and Day: the board is paper.
 const COLORS = ['#EDB7B9', '#F1CDA4', '#EEE0A2', '#CBDAAE', '#AFD8D0', '#B6CBEA', '#CFBCE6', '#EEBFD8', '#DCCBAD', '#CBD0D8'];
 const EXAMPLES = {   // the files in puzzles/, graded by gradePuzzle (test_solver.py checks they match)
-  easy: 'HHHHGGGJJJ HCHHGGGIII CCHCGGGIII CCCCGGGIII CCCCGGGEII FFFDDGGEII FDDDDDEEBI ADADDDBEBI AAAABBBBBB AAAAAABBBB',
-  medium: 'CCCCGGGGEE CCCCGJGGEE CCCCGJJJJE CCCCGGAJJE CCCAAAAABE HHFAAAAABB HHFFFFFBBB HHIIDDIIBB HIIDDDIIBB HIIIIIIIII',
-  hard: 'JJJJCCCCJJ JJJJJJJJJJ IJHHBBBJJJ IIHHHGBGGJ IIHHHGGGGG IFFFHHDGGD IIIFHHDDGD IIEFFHADDD IIEEEHADDD IIEEEAAAAD',
+  easy: 'BEEEAADDDG BAAAADDDGG BBAAAADDGG BBBBJADDDG JBBBJJGGGG JBJJJHHFGI JJJJHHHFII JJJJHHHFII JCJCCHHHII JCCCHHHIII',
+  medium: 'HHHHGGGJJJ HCHHGGGIII CCHCGGGIII CCCCGGGIII CCCCGGGEII FFFDDGGEII FDDDDDEEBI ADADDDBEBI AAAABBBBBB AAAAAABBBB',
+  hard: 'CCCCGGGGEE CCCCGJGGEE CCCCGJJJJE CCCCGGAJJE CCCAAAAABE HHFAAAAABB HHFFFFFBBB HHIIDDIIBB HIIDDDIIBB HIIIIIIIII',
   expert: 'FFFFJJIIII FEFFJJJJII EEEEEJJJII ECCCJJJJAI CCCCJAJJAA DCCCHAAAAA DCCCHHHAAA DDDCBBHGGG DDDBBBHHHG DDDDBHHHHG',
 };
 const LEVEL_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard', expert: 'Expert' };
+const RULE_NAMES = { counting: 'Completed Sections', roommates: 'Rude Roommates', neighbors: 'Nosy Neighbors', 'squeeze-1': 'a squeeze inside one row or column',
+  'squeeze-2': 'a squeeze across two rows or columns', 'squeeze-wide': 'a squeeze across three or more rows or columns', chunking: 'Chunking', deep: 'a chain of what-ifs', guess: 'guessing' };
 const STORE_KEY = 'star-battle-puzzle';
 
 /* ---------------- The puzzle being edited ---------------- */
@@ -440,6 +446,10 @@ function draw() {
   s += `<path d="${walls}" stroke="#1f1a14" stroke-width="6" stroke-linecap="square" fill="none"/>`;
   s += `<rect x="0" y="0" width="${span}" height="${span}" fill="none" stroke="#1f1a14" stroke-width="${2 * M / scale}"/>`;
   if (marks) {
+    // A soft plum tint over the row, column, region or pair of lines the step's reasoning is about.
+    if (step.action !== 'solved') for (const [r, c] of step.focus || []) {
+      s += `<rect x="${c * CELL}" y="${r * CELL}" width="${CELL}" height="${CELL}" fill="#6C4487" fill-opacity=".2"/>`;
+    }
     for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
       const cx = c * CELL + CELL / 2, cy = r * CELL + CELL / 2;
       if (marks[r][c] === STAR) s += `<path d="${STAR_PATH}" transform="translate(${cx} ${cy})" fill="#1f1a14"/>`;
@@ -541,11 +551,12 @@ function showChecks() {
   let issue = check.block || '';
   badge.className = 'badge';
   badge.textContent = '';
+  badge.title = '';
   if (!check.block && check.split.length) issue = `Region${check.split.length > 1 ? 's' : ''} ${check.split.join(', ')} ${check.split.length > 1 ? 'are' : 'is'} split into separate pieces. That's unusual, but you can still solve it.`;
   if (!check.block && grade) {
     if (grade.solutions === 0) { badge.textContent = 'No Answer'; badge.classList.add('warn'); issue = issue || 'This puzzle has no answer: no way to place the stars follows every rule. The solver will show where it gets stuck.'; }
     else if (grade.solutions > 1) { badge.textContent = 'Several Answers'; badge.classList.add('warn'); issue = issue || 'This puzzle has more than one answer, so the solver will find one of them.'; }
-    else badge.textContent = LEVEL_NAMES[grade.difficulty];
+    else { badge.textContent = LEVEL_NAMES[grade.difficulty]; badge.title = `Hardest reasoning needed: ${RULE_NAMES[grade.hardestRule] || grade.hardestRule}`; }
   }
   $('issue').textContent = issue;
 }
@@ -645,6 +656,8 @@ function tidy(text) {
     .replace(/from region ([A-J]), which fills those regions up\. Their cells/g, 'from region $1, which fills it up. Its cells')
     .replace(/region\(s\)/g, 'regions')
     .replace(/needs 1 more star but there's no room for them/g, "needs 1 more star but there's no room for it")
+    .replace(/its other 1 star\b/g, 'its other star').replace(/for the 1 star it still needs/g, 'for the star it still needs')
+    .replace(/2x2/g, '2×2')
     .replace(/neighbours/g, 'neighbors').replace(/go round/g, 'go around')
     .replace(/ - /g, ' — ');
 }

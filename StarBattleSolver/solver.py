@@ -22,18 +22,30 @@ HOW DOES THIS PROGRAM SOLVE IT?  (the short version)
         STAR    - we are sure a star goes here
         BLANK   - we are sure NO star goes here (a human would draw an "x")
 
-    Step 1 - LOGIC. We keep applying four rules of thumb ("deductions")
-             that turn UNKNOWN cells into STARs or BLANKs:
-                 Rule 1  Counting      - is a row/column/region full, or
-                                         does it have exactly enough room?
-                 Rule 2  Squeeze       - do N regions fit inside N rows?
-                 Rule 3  Quick what-if - would a star here instantly leave
-                                         some row/column/region without room?
-                 Rule 4  Deep what-if  - would a star here, after following
+    Step 1 - LOGIC. We keep applying five rules of thumb ("deductions")
+             that turn UNKNOWN cells into STARs or BLANKs. Rules 1-4 are the
+             ones in Carson's instruction manual for the Star Battles round of
+             the 2022 Berkeley mini Math Tournament, and the step-by-step
+             explanations use the manual's names for them:
+                 Rule 1  Counting      - is a row/column/region full ("Completed
+                                         Sections"), or does it have exactly
+                                         enough room?
+                 Rule 2  Squeeze       - do N regions fit inside N rows ("No
+                                         More Space"), or do N rows touch only
+                                         N regions ("Too Much Space")?
+                 Rule 3  Quick what-if - would a star here instantly leave its
+                                         own row/column/region ("Rude
+                                         Roommates") or another one ("Nosy
+                                         Neighbors") without room?
+                 Rule 4  Chunking      - would a star here leave two
+                                         neighbouring rows (or columns) unable
+                                         to fit their stars, given that every
+                                         2 x 2 "chunk" holds at most one star?
+                 Rule 5  Deep what-if  - would a star here, after following
                                          Rules 1 & 2 forward, cause a problem?
              Each rule is explained in plain English further down.
 
-    Step 2 - GUESS. When all four rules get stuck, we pick the cell where a
+    Step 2 - GUESS. When all five rules get stuck, we pick the cell where a
              guess will teach us the most, pretend it holds a star, and keep
              going with logic on a *copy* of the board.
 
@@ -63,6 +75,7 @@ You can also run this file on its own from a terminal:
 # a few named pieces of information (like a form with labelled boxes).
 from dataclasses import dataclass, field
 # `comb` counts combinations, e.g. comb(5, 2) = 10 ways to pick 2 things from 5.
+from itertools import combinations
 from math import comb
 import sys
 
@@ -96,12 +109,20 @@ class Step:
               of lists filled with UNKNOWN / STAR / BLANK.
     depth   - how many guesses deep we currently are (0 = pure logic, no
               guesses in play). Handy for showing "how unsure" the board is.
+    focus   - list of (row, column) cells of the row, column, region or band
+              the step's reasoning is about (the app tints them), or [].
+    rule    - which rule made the step: "counting", "roommates", "neighbors",
+              "squeeze-1" / "squeeze-2" / "squeeze-wide" (a band of 1, 2, or 3+
+              lines), "chunking", "deep", "guess", "backtrack", or "" (the
+              start, the end, and contradictions). Used to grade difficulty.
     """
     action: str
     cells: list
     message: str
     grid: list
     depth: int = 0
+    focus: list = field(default_factory=list)
+    rule: str = ""
 
 
 @dataclass
@@ -127,7 +148,7 @@ class StarBattleSolver:
     matters because guessing requires lots of copies.
     """
 
-    def __init__(self, regions, stars=2, deep_lookahead=True):
+    def __init__(self, regions, stars=2, deep_lookahead=True, chunking=True):
         """
         regions - a list of rows, each row a list (or string) of region labels.
                   Example for a tiny 4 x 4 board:
@@ -139,10 +160,11 @@ class StarBattleSolver:
                   exactly as many different labels as there are rows.
         stars   - how many stars go in each row / column / region (2 for the
                   standard 10 x 10 puzzle, 1 for small beginner puzzles).
-        deep_lookahead - whether to use Rule 4 (see below). It makes the
+        deep_lookahead - whether to use Rule 5 (see below). It makes the
                   solver need far fewer guesses, which is nicer to watch.
                   The puzzle generator switches it off because it solves
                   hundreds of throwaway puzzles and only cares about speed.
+        chunking - whether to use Rule 4. The generator switches it off too.
         """
         # ---- Basic size information --------------------------------------
         self.n = len(regions)          # number of rows (also = columns)
@@ -203,7 +225,8 @@ class StarBattleSolver:
             self.neighbours.append(touching)
 
         self.deep_lookahead = deep_lookahead
-        # True while Rule 4 runs a silent experiment (see _rule_deep_lookahead).
+        self.chunking = chunking
+        # True while Rule 5 runs a silent experiment (see _rule_deep_lookahead).
         self._quiet = False
 
         # Some statistics the GUI likes to show.
@@ -231,13 +254,19 @@ class StarBattleSolver:
         """Copy the flat board into a list of rows (what the GUI draws)."""
         return [grid[r * self.n:(r + 1) * self.n] for r in range(self.n)]
 
-    def _step(self, action, cells, message, grid, depth):
+    def _step(self, action, cells, message, grid, depth, focus=(), rule=""):
         """Package up a report (a Step) for whoever is watching."""
         if self._quiet:
-            # During a silent "what-if" experiment (Rule 4) nobody is
+            # During a silent "what-if" experiment (Rule 5) nobody is
             # watching, so we skip the board snapshot to save time.
             return Step(action, [], message, None, depth)
-        return Step(action, self._rc(cells), message, self._snapshot(grid), depth)
+        return Step(action, self._rc(cells), message, self._snapshot(grid), depth,
+                    self._rc(focus), rule)
+
+    @staticmethod
+    def _kind(unit):
+        """'Rows', 'Columns' or 'Sections', for the "Completed ..." rule name."""
+        return {"row": "Rows", "column": "Columns"}.get(unit.name.split()[0], "Sections")
 
     def _can_fit(self, cells, needed):
         """
@@ -314,8 +343,9 @@ class StarBattleSolver:
         For every row, column and region, compare how many stars it still
         needs with how many open cells it has left:
 
-          a) FULL: It already has its 2 stars  ->  every other open cell in it
-             must be blank.
+          a) COMPLETED: It already has its 2 stars  ->  every other open cell
+             in it must be blank. (Carson's BmMT manual calls this "Completed
+             Sections"; the same goes for rows and columns.)
           b) NO ROOM: It needs more stars than it can possibly fit (taking
              "no touching" into account)  ->  the board is impossible.
           c) EXACT FIT: The number of open cells equals the number of stars it
@@ -329,17 +359,18 @@ class StarBattleSolver:
             if needed < 0:
                 # More stars than allowed - can only happen after a bad guess.
                 yield self._step("contradiction", [], f"{unit.name} has too many "
-                                 "stars - this can't be right.", grid, depth)
+                                 "stars - this can't be right.", grid, depth, unit.cells)
                 return "broken"
 
             if needed == 0 and open_cells:
-                # (a) FULL: cross out everything else in this unit.
+                # (a) COMPLETED: cross out everything else in this unit.
                 for cell in open_cells:
                     grid[cell] = BLANK
                 yield self._step("blank", open_cells,
-                                 f"{self._cap(unit.name)} already has its "
-                                 f"{self.stars} star(s), so the rest of it is "
-                                 "crossed out.", grid, depth)
+                                 f"Completed {self._kind(unit)}: {unit.name} "
+                                 f"already has its {self.stars} star(s), so the "
+                                 "rest of it is crossed out.", grid, depth, unit.cells,
+                                 "counting")
                 return "progress"
 
             if needed > 0 and not self._can_fit(open_cells, needed):
@@ -347,49 +378,49 @@ class StarBattleSolver:
                 yield self._step("contradiction", open_cells,
                                  f"{self._cap(unit.name)} needs {needed} more "
                                  "star(s) but there's no room for them without "
-                                 "stars touching.", grid, depth)
+                                 "stars touching.", grid, depth, unit.cells)
                 return "broken"
 
             if needed > 0 and needed == len(open_cells):
                 # (c) EXACT FIT: every open cell must hold a star.
-                crossed = []
                 for cell in open_cells:
-                    result = self._place_star(grid, cell)
-                    if result is None:
+                    if self._place_star(grid, cell) is None:
                         yield self._step("contradiction", [cell], "Two stars "
-                                         f"would touch in {unit.name}.", grid, depth)
+                                         f"would touch in {unit.name}.", grid, depth, unit.cells)
                         return "broken"
-                    crossed += result
                 yield self._step("star", open_cells,
                                  f"{self._cap(unit.name)} needs {needed} more "
                                  f"star(s) and has exactly {needed} open cell(s) "
                                  "left, so they all get stars (and their "
-                                 "neighbours are crossed out).", grid, depth)
+                                 "neighbours are crossed out).", grid, depth, unit.cells,
+                                 "counting")
                 return "progress"
 
         return "stuck"
 
-    def _rule_squeeze(self, grid, depth):
+    def _rule_squeeze(self, grid, depth, min_width=1, max_width=None):
         """
-        RULE 2 - "SQUEEZE" (also called "pigeonhole")
+        RULE 2 - "SQUEEZE" (Carson's manual: "No More Space" and "Too Much
+        Space"; also called the pigeonhole rule)
 
         Picture a horizontal band of, say, 3 rows. Those 3 rows hold exactly
         3 x 2 = 6 stars in total.
 
-          a) If 3 regions sit COMPLETELY inside that band, those 3 regions
-             need 3 x 2 = 6 stars, all of which must come from the band.
-             That uses up every star the band has! So any band cell belonging
-             to a DIFFERENT region must be blank.
+          a) NO MORE SPACE: If 3 regions sit COMPLETELY inside that band,
+             those 3 regions need 3 x 2 = 6 stars, all of which must come from
+             the band. That uses up every star the band has! So any band cell
+             belonging to a DIFFERENT region must be blank.
              (If 4 regions sat completely inside 3 rows, they'd need 8 stars
              but only 6 exist - impossible.)
 
-          b) Flip it around: if only 3 regions TOUCH the band at all, then
-             the band's 6 stars must all come from those 3 regions, which
-             fills them up. So any cells of those regions OUTSIDE the band
-             must be blank.
+          b) TOO MUCH SPACE: Flip it around: if only 3 regions TOUCH the band
+             at all, then the band's 6 stars must all come from those 3
+             regions, which fills them up. So any cells of those regions
+             OUTSIDE the band must be blank.
 
         We check every band of consecutive rows, and every band of
-        consecutive columns, of every width. ("Open" here means not blank.)
+        consecutive columns, from `min_width` to `max_width` lines wide (all
+        widths unless told otherwise). ("Open" here means not blank.)
         """
         n = self.n
         region_units = self.units[self.first_region_unit:]
@@ -415,11 +446,13 @@ class StarBattleSolver:
                         mask |= 1 << line_of(cell)   # turn switch ON
                 masks.append(mask)
 
-            for start in range(n):                  # band's first line
-                band_mask = 0
-                for end in range(start, n - 1):     # band's last line
-                    band_mask |= 1 << end           # add this line to band
-                    width = end - start + 1         # number of lines in band
+            # Narrow bands first: a squeeze in 2 rows is easier to see than
+            # one in 8, so that's the one we'd rather explain. (A band of all
+            # n lines would tell us nothing, so the widest is n - 1.)
+            for width in range(min_width, (max_width or n - 1) + 1):   # lines in band
+                for start in range(n - width + 1):  # band's first line
+                    end = start + width - 1         # band's last line
+                    band_mask = ((1 << width) - 1) << start   # its lines' switches ON
 
                     # Regions completely inside the band (no open cell
                     # outside it), and regions with any open cell in it.
@@ -431,13 +464,16 @@ class StarBattleSolver:
 
                     band_text = (f"{direction} {start + 1}-{end + 1}" if width > 1
                                  else f"{direction[:-1]} {start + 1}")
+                    band_cells = [cell for line in range(start, end + 1)
+                                  for cell in line_cells[line].cells]
+                    rule = "squeeze-1" if width == 1 else "squeeze-2" if width == 2 else "squeeze-wide"
 
                     if len(inside) > width:
                         # Too many regions squeezed into too few lines.
                         yield self._step("contradiction", [],
                                          f"{len(inside)} regions are squeezed into "
                                          f"just {band_text} - not enough stars "
-                                         "to go round.", grid, depth)
+                                         "to go round.", grid, depth, band_cells)
                         return "broken"
 
                     if len(touching) < width:
@@ -445,14 +481,12 @@ class StarBattleSolver:
                         yield self._step("contradiction", [],
                                          f"Only {len(touching)} region(s) can "
                                          f"supply stars to {band_text}, which "
-                                         "needs more than that.", grid, depth)
+                                         "needs more than that.", grid, depth, band_cells)
                         return "broken"
 
                     if len(inside) == width:
-                        # (a) Cross out band cells from other regions.
-                        to_blank = [cell
-                                    for line in range(start, end + 1)
-                                    for cell in line_cells[line].cells
+                        # (a) No More Space: cross out band cells from other regions.
+                        to_blank = [cell for cell in band_cells
                                     if grid[cell] == UNKNOWN
                                     and self.region_of[cell] not in inside]
                         if to_blank:
@@ -460,15 +494,15 @@ class StarBattleSolver:
                                 grid[cell] = BLANK
                             names = ", ".join(self.labels[k] for k in inside)
                             yield self._step("blank", to_blank,
-                                             f"Squeeze: region(s) {names} fit "
+                                             f"No More Space: region(s) {names} fit "
                                              f"entirely inside {band_text}, so "
                                              "they use up all of its stars. "
                                              "Other cells there are crossed out.",
-                                             grid, depth)
+                                             grid, depth, band_cells, rule)
                             return "progress"
 
                     if len(touching) == width:
-                        # (b) Cross out the touching regions' cells outside.
+                        # (b) Too Much Space: cross out the touching regions' cells outside.
                         to_blank = [cell
                                     for k in touching
                                     for cell in region_units[k].cells
@@ -479,16 +513,18 @@ class StarBattleSolver:
                                 grid[cell] = BLANK
                             names = ", ".join(self.labels[k] for k in touching)
                             yield self._step("blank", to_blank,
-                                             f"Squeeze: {band_text} can only get "
-                                             f"stars from region(s) {names}, which "
-                                             "fills those regions up. Their cells "
-                                             "outside are crossed out.", grid, depth)
+                                             f"Too Much Space: {band_text} can only "
+                                             f"get stars from region(s) {names}, "
+                                             "which fills those regions up. Their "
+                                             "cells outside are crossed out.",
+                                             grid, depth, band_cells, rule)
                             return "progress"
         return "stuck"
 
     def _rule_lookahead(self, grid, depth):
         """
-        RULE 3 - "WOULD IT BREAK SOMETHING?"
+        RULE 3 - "WOULD IT BREAK SOMETHING?"  (Carson's manual: "Rude
+        Roommates" and "Nosy Neighbors")
 
         For each open cell, imagine putting a star there for a moment (we
         don't actually change the board). That star would:
@@ -499,16 +535,20 @@ class StarBattleSolver:
         the stars it needs? If ANY of them couldn't, then a star in this cell
         would wreck the puzzle - so the cell must be blank.
 
-        Human solvers do this all the time ("if I put a star here, column 4
-        would have no room left...").
+            RUDE ROOMMATES: the row/column/region that would run out of room
+                is the cell's OWN (a star here leaves no room for its
+                roommate star).
+            NOSY NEIGHBORS: it's a different one nearby.
+
+        All the cells crossed out for the same reason (the same rule, the
+        same row/column/region left without room) are reported together as
+        one step, the way a person would write it down.
         """
         # Work out each unit's current status once, up front.
-        status = [self._status(grid, unit) for unit in self.units]
-        # Did we cross anything out during this pass?
         # (Crossing out a cell only ever makes the board MORE cramped, so a
-        # conclusion we reach with the slightly older status is still true.
-        # That lets us finish the whole pass instead of restarting each time.)
-        found = False
+        # conclusion reached with this status stays true for the whole pass.)
+        status = [self._status(grid, unit) for unit in self.units]
+        groups = {}        # (unit, roommate?) -> cells crossed out for that reason
 
         for cell in range(self.n * self.n):
             if grid[cell] != UNKNOWN:
@@ -533,22 +573,112 @@ class StarBattleSolver:
                 needed, open_cells = status[u]
                 if needed <= 0:
                     continue
-                still_needed = needed - (1 if u in self.units_of[cell] else 0)
+                own = u in self.units_of[cell]
+                still_needed = needed - (1 if own else 0)
                 remaining = [c for c in open_cells if c not in removed]
                 if not self._can_fit(remaining, still_needed):
-                    grid[cell] = BLANK
-                    yield self._step("blank", [cell],
-                                     f"If {self.name(cell)} had a star, "
-                                     f"{self.units[u].name} "
-                                     "would no longer have room for its stars. "
-                                     "So it's crossed out.", grid, depth)
-                    found = True
+                    groups.setdefault((u, own), []).append(cell)
                     break          # this cell is settled; move to the next
-        return "progress" if found else "stuck"
+
+        for (u, own), cells in groups.items():
+            for cell in cells:
+                grid[cell] = BLANK
+            unit = self.units[u]
+            needed = status[u][0]
+            if own:
+                why = (f"{unit.name} would have no room left for its other "
+                       f"{needed - 1} star(s)")
+                name = "Rude Roommates"
+            else:
+                why = (f"{unit.name} would no longer have room for the {needed} "
+                       "star(s) it still needs")
+                name = "Nosy Neighbors"
+            if len(cells) == 1:
+                text = (f"{name}: if {self.name(cells[0])} had a star, {why}. "
+                        "So it's crossed out.")
+            else:
+                text = (f"{name}: a star in any of these {len(cells)} cells means "
+                        f"{why}. So they're all crossed out.")
+            yield self._step("blank", cells, text, grid, depth, unit.cells,
+                             "roommates" if own else "neighbors")
+        return "progress" if groups else "stuck"
+
+    def _rule_chunking(self, grid, depth):
+        """
+        RULE 4 - "CHUNKING"  (from Carson's BmMT manual)
+
+        Any 2 x 2 square of cells holds at most ONE star, because any two
+        cells in it touch. So two neighbouring rows can hold at most one star
+        per 2 x 2 "chunk" of them. That puts a ceiling on how many stars the
+        pair of rows can still take.
+
+        For each open cell we imagine a star there (as in Rule 3), then check
+        every pair of neighbouring rows, and every pair of neighbouring
+        columns: can BOTH lines still get the stars they need, with no two
+        stars touching? (We check this exactly, by trying the ways the first
+        line's stars could go; chunking is how a person sees it at a glance.)
+        If some pair can't, the star can't go in that cell, so it's crossed
+        out. As in Rule 3, cells crossed out because of the same pair of
+        lines are reported together.
+        """
+        n = self.n
+        status = [self._status(grid, unit) for unit in self.units]
+        pairs = [(i, i + 1) for i in range(n - 1)] + [(n + i, n + i + 1) for i in range(n - 1)]
+        groups = {}        # pair of lines -> cells crossed out because of it
+
+        for cell in range(n * n):
+            if grid[cell] != UNKNOWN:
+                continue
+            removed = set(self.neighbours[cell])
+            removed.add(cell)
+            for u in self.units_of[cell]:
+                if status[u][0] == 1:
+                    removed.update(status[u][1])
+            for pair in pairs:
+                a, b = pair
+                if not any(x in removed for x in self.units[a].cells + self.units[b].cells):
+                    continue       # the imaginary star doesn't touch these lines
+                need_a = status[a][0] - (1 if a in self.units_of[cell] else 0)
+                need_b = status[b][0] - (1 if b in self.units_of[cell] else 0)
+                open_a = [c for c in status[a][1] if c not in removed]
+                open_b = [c for c in status[b][1] if c not in removed]
+                if not self._pair_can_fit(open_a, need_a, open_b, need_b):
+                    groups.setdefault(pair, []).append(cell)
+                    break
+
+        for (a, b), cells in groups.items():
+            for cell in cells:
+                grid[cell] = BLANK
+            lines = f"{self.units[a].name} and {self.units[b].name}"
+            need = status[a][0] + status[b][0]
+            why = (f"{lines} couldn't fit the {need} star(s) they still need between "
+                   "them (each 2x2 chunk of two neighbouring lines holds at most one star)")
+            if len(cells) == 1:
+                text = f"Chunking: if {self.name(cells[0])} had a star, {why}. So it's crossed out."
+            else:
+                text = (f"Chunking: a star in any of these {len(cells)} cells means "
+                        f"{why}. So they're all crossed out.")
+            yield self._step("blank", cells, text, grid, depth,
+                             self.units[a].cells + self.units[b].cells, "chunking")
+        return "progress" if groups else "stuck"
+
+    def _pair_can_fit(self, open_a, need_a, open_b, need_b):
+        """Can line A get `need_a` stars and line B `need_b`, none touching?"""
+        if need_a < 0 or need_b < 0:
+            return False
+        for combo in combinations(open_a, need_a):
+            if any(y in self.neighbours[x] for x, y in combinations(combo, 2)):
+                continue                       # two of A's stars would touch
+            blocked = set()
+            for x in combo:
+                blocked |= self.neighbours[x]
+            if self._can_fit([c for c in open_b if c not in blocked], need_b):
+                return True
+        return False
 
     def _rule_deep_lookahead(self, grid, depth):
         """
-        RULE 4 - "FOLLOW THE WHAT-IF ALL THE WAY THROUGH"
+        RULE 5 - "FOLLOW THE WHAT-IF ALL THE WAY THROUGH"
 
         A stronger version of Rule 3. For each open cell we make a scratch
         copy of the board, put a pretend star in the cell, and then keep
@@ -558,30 +688,36 @@ class StarBattleSolver:
         was wrong - so on the REAL board that cell gets crossed out.
 
         The scratch work is done silently (nothing is shown on screen); only
-        the conclusion is reported. This is the rule that makes the solver
-        need very few real guesses, even on hard puzzles.
+        the conclusion is reported. Cells that lead to the same dead end are
+        reported together. This is the rule that makes the solver need very
+        few real guesses, even on hard puzzles.
         """
-        found = False
+        groups = {}        # dead end -> cells whose pretend star leads to it
         for cell in range(self.n * self.n):
             if grid[cell] != UNKNOWN:
                 continue
-            scratch = grid[:]                  # a throwaway copy
-            reason = self._try_star_quietly(scratch, cell)
+            reason = self._try_star_quietly(grid[:], cell)
             if reason is not None:
-                # As in Rule 3: crossing a cell out only makes things more
-                # cramped, so we can keep scanning instead of restarting.
+                groups.setdefault(reason, []).append(cell)
+
+        for reason, cells in groups.items():
+            for cell in cells:
                 grid[cell] = BLANK
-                yield self._step("blank", [cell],
-                                 f"Pretend {self.name(cell)} has a star and follow "
-                                 f"the rules forward: it leads to a dead end "
-                                 f"({reason[0].lower() + reason[1:].rstrip('.')})."
-                                 " So it's crossed out.", grid, depth)
-                found = True
-        return "progress" if found else "stuck"
+            why = reason[0].lower() + reason[1:].rstrip('.')
+            if len(cells) == 1:
+                text = (f"Pretend {self.name(cells[0])} has a star and follow the "
+                        f"rules forward: it leads to a dead end ({why}). So it's "
+                        "crossed out.")
+            else:
+                text = (f"Pretend any of these {len(cells)} cells has a star and "
+                        "follow the rules forward: each leads to the same dead end "
+                        f"({why}). So they're all crossed out.")
+            yield self._step("blank", cells, text, grid, depth, (), "deep")
+        return "progress" if groups else "stuck"
 
     def _try_star_quietly(self, scratch, cell):
         """
-        Helper for Rule 4. Puts a star on `cell` in the scratch board, then
+        Helper for Rule 5. Puts a star on `cell` in the scratch board, then
         repeats Rules 1 and 2 until they stop. Returns a sentence explaining
         the dead end if one is reached, or None if nothing went wrong.
         """
@@ -612,13 +748,27 @@ class StarBattleSolver:
 
     def _deduce(self, grid, depth):
         """
-        Keep applying the rules, cheapest first, until none of them can make
+        Keep applying the rules, SIMPLEST FIRST, until none of them can make
         any more progress. Whenever a rule makes progress we start again
-        from Rule 1, because the cheap rule is often unlocked by the new info.
+        from the top, because the simple rules are often unlocked by the new
+        information. "Simplest" means how much of the board a person has to
+        keep in mind at once:
+            Rule 1  counting                  - one row/column/region
+            Rule 3  Rude Roommates / Nosy Neighbors - one or two
+            Rule 2  squeezes in 1 or 2 lines  - a narrow band
+            Rule 4  chunking                  - two lines together
+            Rule 2  squeezes in 3+ lines      - a wide band
+            Rule 5  deep what-if              - a whole chain of moves
+        Trying them in this order means a puzzle's steps show the simplest
+        reasoning that works, which is also how its difficulty is graded.
 
         Returns True if the board is still possible, False if it broke.
         """
-        rules = [self._rule_counting, self._rule_squeeze, self._rule_lookahead]
+        rules = [self._rule_counting, self._rule_lookahead,
+                 lambda grid, depth: self._rule_squeeze(grid, depth, 1, 2)]
+        if self.chunking:
+            rules.append(self._rule_chunking)
+        rules.append(lambda grid, depth: self._rule_squeeze(grid, depth, 3))
         if self.deep_lookahead:
             rules.append(self._rule_deep_lookahead)
         while True:
@@ -627,7 +777,7 @@ class StarBattleSolver:
                 if outcome == "broken":
                     return False
                 if outcome == "progress":
-                    break           # go back to Rule 1
+                    break           # go back to the simplest rule
             else:
                 # The `else` of a `for` loop runs only if we never hit `break`,
                 # i.e. every single rule said "stuck". Time to stop.
@@ -696,7 +846,7 @@ class StarBattleSolver:
             self._place_star(trial, cell)
             yield self._step("guess", [cell], f"Stuck - trying a star at "
                              f"{self.name(cell)} as a guess (guess level "
-                             f"{depth + 1}).", trial, depth + 1)
+                             f"{depth + 1}).", trial, depth + 1, (), "guess")
 
             # Explore the guess. If it finished the job, we're done.
             done = yield from self._search(trial, depth + 1, max_solutions)
@@ -710,7 +860,7 @@ class StarBattleSolver:
             grid[cell] = BLANK
             yield self._step("backtrack", [cell], f"Undoing the guess: a star at "
                              f"{self.name(cell)} leads nowhere, so that cell must "
-                             "be blank.", grid, depth)
+                             "be blank.", grid, depth, (), "backtrack")
             # ...and loop back to Step 1 with this new knowledge.
 
     # ==========================================================================

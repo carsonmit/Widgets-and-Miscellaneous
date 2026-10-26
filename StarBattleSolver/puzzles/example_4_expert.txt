@@ -1,4 +1,4 @@
-# Expert - needs a guess inside a guess, with lots of backtracking. Fun to watch!
+# Expert - logic alone gets stuck: the solver has to guess, even a guess inside a guess. Fun to watch!
 # 10x10, 2 stars per row / column / region.
 # Each letter is the region that cell belongs to.
 FFFFJJIIII

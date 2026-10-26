@@ -10,24 +10,28 @@ long explanation):
     4. Ask the solver how many answers the puzzle has. If more than one, move
        a cell of an unwanted answer into a neighbouring region and ask again.
 
-GRADING (new in the web app). A puzzle's difficulty is decided by watching our
-solver, which always tries its cheapest rule first and only reaches for a
-harder one when every easier rule is stuck:
+GRADING (new in the web app). A puzzle's difficulty is the WIDEST reasoning
+it needs: how much of the board a person has to keep in mind at once. The
+solver always tries its simplest rule first (see deduce() in solver.js), so
+the hardest rule it ever uses on the way to the answer is the hardest one the
+puzzle really needs. The rule names are the ones in Carson's instruction
+manual for the Star Battles round of the 2022 Berkeley mini Math Tournament.
 
-    Easy    No guessing, and never needs Rule 4. Rules 1-3 (counting,
-            squeeze, quick what-if) solve it.
-    Medium  No guessing, but needs Rule 4 (follow a what-if through several
-            moves) at least once.
-    Hard    All four rules get stuck, so the solver has to guess, but never
-            more than one guess at a time.
-    Expert  The solver has to guess while already inside a guess (a guess
-            level of 2 or more).
+    Easy    One or two rows/columns/sections at a time: Completed Sections,
+            Rude Roommates, Nosy Neighbors, and squeezes inside one row or
+            column.
+    Medium  Two or more lines together: chunking, or No More Space / Too
+            Much Space across 2 or more rows or columns.
+    Hard    A chain of what-ifs (Rule 5), but no guessing.
+    Expert  Trial and error: even with every rule, the solver has to guess.
+            (A contest like BmMT only uses puzzles that logic alone can solve,
+            so these are beyond contest puzzles.)
 
 Because the solver is deterministic (same puzzle, same steps), the grade of a
 puzzle is always the same, and gradePuzzle() can check any puzzle, including
 the examples. To make a puzzle of a chosen difficulty we generate puzzles and
-keep the first one whose grade matches. Of 300 random puzzles, about 27% were
-Easy, 47% Medium, 17% Hard and 8% Expert, so Expert takes the longest.
+keep the first one whose grade matches. Of 300 random puzzles, about 15% were
+Easy, 20% Medium, 41% Hard and 24% Expert, so Easy takes the longest.
 ================================================================================
 */
 'use strict';
@@ -170,7 +174,7 @@ function makeUnique(regions, secret, stars, rng, maxRounds = 60) {
   const secretKeys = new Set(secret.map(([r, c]) => r * n + c));
   for (let round = 0; round < maxRounds; round++) {
     const current = owner.map(row => row.map(k => REGION_LETTERS[k]).join(''));
-    const solver = new Solver(current, stars, false);
+    const solver = new Solver(current, stars, false, false);   // Rules 4 and 5 off: faster
     if (solver.countSolutions(2) === 1) return current;
     let unwanted = null;
     for (const sol of solver.solutions) {
@@ -210,29 +214,28 @@ function generatePuzzle(n = 10, stars = 2, rng = makeRng(), maxAttempts = 200) {
   throw new Error("Couldn't find a puzzle with a unique solution - try again.");
 }
 
+// How much of the board each rule asks you to keep in mind at once (see GRADING above).
+const RULE_LEVEL = { counting: 1, roommates: 1, neighbors: 2, 'squeeze-1': 2, 'squeeze-2': 3, 'squeeze-wide': 3, chunking: 3, deep: 4 };
+const LEVEL_NAME = { 1: 'easy', 2: 'easy', 3: 'medium', 4: 'hard', 5: 'expert' };
+
 /**
  * Grade a puzzle by solving it once and watching what the solver needed.
- * Returns { difficulty, solutions, guesses, maxGuessLevel, deepWhatIfs, steps }.
+ * Returns { difficulty, hardestRule, solutions, guesses, maxGuessLevel, steps }.
  * difficulty is null if the puzzle has no solution or more than one.
  */
 function gradePuzzle(rows, stars = 2) {
   const solver = new Solver(rows, stars);
-  let maxGuessLevel = 0, deepWhatIfs = 0, steps = 0;
+  let maxGuessLevel = 0, steps = 0, level = 1, hardestRule = 'counting';
   for (const step of solver.solveSteps()) {
     steps++;
     maxGuessLevel = Math.max(maxGuessLevel, step.depth);
-    // Rule 4's reports are the only ones that begin "Pretend".
-    if (step.action === 'blank' && step.depth === 0 && step.message.startsWith('Pretend')) deepWhatIfs++;
+    // Only the main line counts: steps inside a guess are part of trial and error.
+    if (step.depth === 0 && RULE_LEVEL[step.rule] > level) { level = RULE_LEVEL[step.rule]; hardestRule = step.rule; }
   }
+  if (maxGuessLevel > 0) { level = 5; hardestRule = 'guess'; }
   const solutions = new Solver(rows, stars, false).countSolutions(2);
-  let difficulty = null;
-  if (solutions === 1) {
-    if (maxGuessLevel >= 2) difficulty = 'expert';
-    else if (maxGuessLevel === 1) difficulty = 'hard';
-    else if (deepWhatIfs > 0) difficulty = 'medium';
-    else difficulty = 'easy';
-  }
-  return { difficulty, solutions, guesses: solver.guesses, maxGuessLevel, deepWhatIfs, steps };
+  const difficulty = solutions === 1 ? LEVEL_NAME[level] : null;
+  return { difficulty, hardestRule, solutions, guesses: solver.guesses, maxGuessLevel, steps };
 }
 
 /**

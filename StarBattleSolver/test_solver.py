@@ -94,13 +94,14 @@ class SolverTests(unittest.TestCase):
         """
         puzzles = [load_puzzle(p) for p in sorted(glob.glob(os.path.join(HERE, "puzzles", "*.txt")))]
         puzzles += [generate_puzzle(seed=seed) for seed in range(10)]
-        expected = [[[s.action, [list(c) for c in s.cells], s.message, s.grid, s.depth]
+        expected = [[[s.action, [list(c) for c in s.cells], s.message, s.grid, s.depth,
+                      [list(c) for c in s.focus], s.rule]
                      for s in StarBattleSolver(p).solve_steps()] for p in puzzles]
         script = """
             const { StarBattleSolver } = require('./solver.js');
             const puzzles = JSON.parse(require('fs').readFileSync(0, 'utf8'));
             console.log(JSON.stringify(puzzles.map(p => [...new StarBattleSolver(p).solveSteps()]
-              .map(s => [s.action, s.cells, s.message, s.grid, s.depth]))));
+              .map(s => [s.action, s.cells, s.message, s.grid, s.depth, s.focus, s.rule]))));
         """
         actual = run_js(script, puzzles)
         for i, (want, got) in enumerate(zip(expected, actual)):

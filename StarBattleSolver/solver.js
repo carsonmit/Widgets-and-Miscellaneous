@@ -51,9 +51,10 @@ class StarBattleSolver {
   /**
    * regions - a list of rows, each a string (or list) of region labels.
    * stars   - stars per row / column / region (2 for 10 x 10).
-   * deepLookahead - whether to use Rule 4 (the generator switches it off for speed).
+   * deepLookahead - whether to use Rule 5, and chunking whether to use Rule 4
+   *                 (the generator switches both off for speed).
    */
-  constructor(regions, stars = 2, deepLookahead = true) {
+  constructor(regions, stars = 2, deepLookahead = true, chunking = true) {
     this.n = regions.length;
     this.stars = stars;
     for (const row of regions) {
@@ -102,7 +103,8 @@ class StarBattleSolver {
     this.neighbourSets = this.neighbours.map(list => new Set(list));
 
     this.deepLookahead = deepLookahead;
-    this.quiet = false;        // true while Rule 4 runs a silent experiment
+    this.chunking = chunking;
+    this.quiet = false;        // true while Rule 5 runs a silent experiment
     this.guesses = 0;
     this.backtracks = 0;
     this.solutions = [];
@@ -120,10 +122,16 @@ class StarBattleSolver {
   snapshot(grid) { return range(this.n).map(r => grid.slice(r * this.n, (r + 1) * this.n)); }
 
   /** Package up a report. action: start / star / blank / guess / backtrack / contradiction / solved / failed */
-  step(action, cells, message, grid, depth) {
-    if (this.quiet) return { action, cells: [], message, grid: null, depth };
-    return { action, cells: this.rc(cells), message, grid: this.snapshot(grid), depth };
+  step(action, cells, message, grid, depth, focus = [], rule = '') {
+    if (this.quiet) return { action, cells: [], message, grid: null, depth, focus: [], rule: '' };
+    return { action, cells: this.rc(cells), message, grid: this.snapshot(grid), depth, focus: this.rc(focus), rule };
   }
+
+  /** 'Rows', 'Columns' or 'Sections', for the "Completed ..." rule name. */
+  static kind(unit) {
+    return { row: 'Rows', column: 'Columns' }[unit.name.split(' ')[0]] || 'Sections';
+  }
+
 
   /** Can `needed` non-touching stars be placed among these open cells? */
   canFit(cells, needed) {
@@ -160,40 +168,43 @@ class StarBattleSolver {
   //  THE LOGIC RULES. Each returns "progress", "stuck" or "broken".
   // ==========================================================================
 
-  /** RULE 1 - COUNTING: full units, units with no room, exact fits. */
+  /** RULE 1 - COUNTING: completed units ("Completed Sections"), units with no room, exact fits. */
   *ruleCounting(grid, depth) {
     const cap = StarBattleSolver.cap;
     for (const unit of this.units) {
       const [needed, open] = this.status(grid, unit);
       if (needed < 0) {
-        yield this.step('contradiction', [], `${unit.name} has too many stars - this can't be right.`, grid, depth);
+        yield this.step('contradiction', [], `${unit.name} has too many stars - this can't be right.`, grid, depth, unit.cells);
         return 'broken';
       }
       if (needed === 0 && open.length) {
         for (const cell of open) grid[cell] = BLANK;
-        yield this.step('blank', open, `${cap(unit.name)} already has its ${this.stars} star(s), so the rest of it is crossed out.`, grid, depth);
+        yield this.step('blank', open, `Completed ${StarBattleSolver.kind(unit)}: ${unit.name} already has its ${this.stars} star(s), so the rest of it is crossed out.`, grid, depth, unit.cells, 'counting');
         return 'progress';
       }
       if (needed > 0 && !this.canFit(open, needed)) {
-        yield this.step('contradiction', open, `${cap(unit.name)} needs ${needed} more star(s) but there's no room for them without stars touching.`, grid, depth);
+        yield this.step('contradiction', open, `${cap(unit.name)} needs ${needed} more star(s) but there's no room for them without stars touching.`, grid, depth, unit.cells);
         return 'broken';
       }
       if (needed > 0 && needed === open.length) {
         for (const cell of open) {
           if (this.placeStar(grid, cell) === null) {
-            yield this.step('contradiction', [cell], `Two stars would touch in ${unit.name}.`, grid, depth);
+            yield this.step('contradiction', [cell], `Two stars would touch in ${unit.name}.`, grid, depth, unit.cells);
             return 'broken';
           }
         }
-        yield this.step('star', open, `${cap(unit.name)} needs ${needed} more star(s) and has exactly ${needed} open cell(s) left, so they all get stars (and their neighbours are crossed out).`, grid, depth);
+        yield this.step('star', open, `${cap(unit.name)} needs ${needed} more star(s) and has exactly ${needed} open cell(s) left, so they all get stars (and their neighbours are crossed out).`, grid, depth, unit.cells, 'counting');
         return 'progress';
       }
     }
     return 'stuck';
   }
 
-  /** RULE 2 - SQUEEZE: N regions inside N rows (or columns), or N rows fed by only N regions. */
-  *ruleSqueeze(grid, depth) {
+  /**
+   * RULE 2 - SQUEEZE: "No More Space" (N regions inside N rows use up their stars) and
+   * "Too Much Space" (N rows touched by only N regions fill those regions). Narrow bands first.
+   */
+  *ruleSqueeze(grid, depth, minWidth = 1, maxWidth = null) {
     const n = this.n, regionUnits = this.units.slice(this.firstRegionUnit);
     const directions = [
       ['rows', cell => Math.floor(cell / n), this.units.slice(0, n)],
@@ -206,35 +217,32 @@ class StarBattleSolver {
         for (const cell of unit.cells) if (grid[cell] !== BLANK) mask |= 1 << lineOf(cell);
         return mask;
       });
-      for (let start = 0; start < n; start++) {
-        let bandMask = 0;
-        for (let end = start; end < n - 1; end++) {
-          bandMask |= 1 << end;
-          const width = end - start + 1;
+      for (let width = minWidth; width <= (maxWidth || n - 1); width++) {
+        for (let start = 0; start <= n - width; start++) {
+          const end = start + width - 1;
+          const bandMask = ((1 << width) - 1) << start;
           const inside = range(n).filter(k => masks[k] && !(masks[k] & ~bandMask));
           const touching = range(n).filter(k => masks[k] & bandMask);
           if (inside.length < width && width < touching.length) continue;
 
           const bandText = width > 1 ? `${direction} ${start + 1}-${end + 1}` : `${direction.slice(0, -1)} ${start + 1}`;
+          const bandCells = [];
+          for (let line = start; line <= end; line++) bandCells.push(...lineCells[line].cells);
+          const rule = width === 1 ? 'squeeze-1' : width === 2 ? 'squeeze-2' : 'squeeze-wide';
           if (inside.length > width) {
-            yield this.step('contradiction', [], `${inside.length} regions are squeezed into just ${bandText} - not enough stars to go round.`, grid, depth);
+            yield this.step('contradiction', [], `${inside.length} regions are squeezed into just ${bandText} - not enough stars to go round.`, grid, depth, bandCells);
             return 'broken';
           }
           if (touching.length < width) {
-            yield this.step('contradiction', [], `Only ${touching.length} region(s) can supply stars to ${bandText}, which needs more than that.`, grid, depth);
+            yield this.step('contradiction', [], `Only ${touching.length} region(s) can supply stars to ${bandText}, which needs more than that.`, grid, depth, bandCells);
             return 'broken';
           }
           if (inside.length === width) {
-            const toBlank = [];
-            for (let line = start; line <= end; line++) {
-              for (const cell of lineCells[line].cells) {
-                if (grid[cell] === UNKNOWN && !inside.includes(this.regionOf[cell])) toBlank.push(cell);
-              }
-            }
+            const toBlank = bandCells.filter(cell => grid[cell] === UNKNOWN && !inside.includes(this.regionOf[cell]));
             if (toBlank.length) {
               for (const cell of toBlank) grid[cell] = BLANK;
               const names = inside.map(k => this.labels[k]).join(', ');
-              yield this.step('blank', toBlank, `Squeeze: region(s) ${names} fit entirely inside ${bandText}, so they use up all of its stars. Other cells there are crossed out.`, grid, depth);
+              yield this.step('blank', toBlank, `No More Space: region(s) ${names} fit entirely inside ${bandText}, so they use up all of its stars. Other cells there are crossed out.`, grid, depth, bandCells, rule);
               return 'progress';
             }
           }
@@ -248,7 +256,7 @@ class StarBattleSolver {
             if (toBlank.length) {
               for (const cell of toBlank) grid[cell] = BLANK;
               const names = touching.map(k => this.labels[k]).join(', ');
-              yield this.step('blank', toBlank, `Squeeze: ${bandText} can only get stars from region(s) ${names}, which fills those regions up. Their cells outside are crossed out.`, grid, depth);
+              yield this.step('blank', toBlank, `Too Much Space: ${bandText} can only get stars from region(s) ${names}, which fills those regions up. Their cells outside are crossed out.`, grid, depth, bandCells, rule);
               return 'progress';
             }
           }
@@ -258,10 +266,13 @@ class StarBattleSolver {
     return 'stuck';
   }
 
-  /** RULE 3 - WOULD IT BREAK SOMETHING? A star here would leave some unit without room. */
+  /**
+   * RULE 3 - WOULD IT BREAK SOMETHING? A star here would leave its own unit ("Rude Roommates")
+   * or another one ("Nosy Neighbors") without room. Cells crossed out for the same reason are one step.
+   */
   *ruleLookahead(grid, depth) {
     const status = this.units.map(unit => this.status(grid, unit));
-    let found = false;
+    const groups = new Map();   // "unit|own" -> cells crossed out for that reason
     for (let cell = 0; cell < this.n * this.n; cell++) {
       if (grid[cell] !== UNKNOWN) continue;
       const removed = new Set(this.neighbours[cell]);
@@ -275,36 +286,108 @@ class StarBattleSolver {
       for (const u of [...affected].sort((a, b) => a - b)) {
         const [needed, open] = status[u];
         if (needed <= 0) continue;
-        const stillNeeded = needed - (this.unitsOf[cell].includes(u) ? 1 : 0);
+        const own = this.unitsOf[cell].includes(u);
         const remaining = open.filter(c => !removed.has(c));
-        if (!this.canFit(remaining, stillNeeded)) {
-          grid[cell] = BLANK;
-          yield this.step('blank', [cell], `If ${this.name(cell)} had a star, ${this.units[u].name} would no longer have room for its stars. So it's crossed out.`, grid, depth);
-          found = true;
+        if (!this.canFit(remaining, needed - (own ? 1 : 0))) {
+          const key = `${u}|${own}`;
+          if (!groups.has(key)) groups.set(key, { u, own, cells: [] });
+          groups.get(key).cells.push(cell);
           break;
         }
       }
     }
-    return found ? 'progress' : 'stuck';
+    for (const { u, own, cells } of groups.values()) {
+      for (const cell of cells) grid[cell] = BLANK;
+      const unit = this.units[u], needed = status[u][0];
+      const name = own ? 'Rude Roommates' : 'Nosy Neighbors';
+      const why = own
+        ? `${unit.name} would have no room left for its other ${needed - 1} star(s)`
+        : `${unit.name} would no longer have room for the ${needed} star(s) it still needs`;
+      const text = cells.length === 1
+        ? `${name}: if ${this.name(cells[0])} had a star, ${why}. So it's crossed out.`
+        : `${name}: a star in any of these ${cells.length} cells means ${why}. So they're all crossed out.`;
+      yield this.step('blank', cells, text, grid, depth, unit.cells, own ? 'roommates' : 'neighbors');
+    }
+    return groups.size ? 'progress' : 'stuck';
   }
 
-  /** RULE 4 - FOLLOW THE WHAT-IF ALL THE WAY: a pretend star, then Rules 1-2 on a scratch copy. */
+  /**
+   * RULE 4 - CHUNKING: every 2 x 2 chunk holds at most one star, so two neighbouring rows (or columns)
+   * can only take so many. A star that would leave such a pair unable to fit its stars is crossed out.
+   */
+  *ruleChunking(grid, depth) {
+    const n = this.n;
+    const status = this.units.map(unit => this.status(grid, unit));
+    const pairs = [];
+    for (let i = 0; i < n - 1; i++) pairs.push([i, i + 1]);
+    for (let i = 0; i < n - 1; i++) pairs.push([n + i, n + i + 1]);
+    const groups = new Map();   // "a|b" -> cells crossed out because of that pair of lines
+    for (let cell = 0; cell < n * n; cell++) {
+      if (grid[cell] !== UNKNOWN) continue;
+      const removed = new Set(this.neighbours[cell]);
+      removed.add(cell);
+      for (const u of this.unitsOf[cell]) if (status[u][0] === 1) status[u][1].forEach(c => removed.add(c));
+      for (const [a, b] of pairs) {
+        if (!this.units[a].cells.concat(this.units[b].cells).some(x => removed.has(x))) continue;
+        const needA = status[a][0] - (this.unitsOf[cell].includes(a) ? 1 : 0);
+        const needB = status[b][0] - (this.unitsOf[cell].includes(b) ? 1 : 0);
+        const openA = status[a][1].filter(c => !removed.has(c));
+        const openB = status[b][1].filter(c => !removed.has(c));
+        if (!this.pairCanFit(openA, needA, openB, needB)) {
+          const key = `${a}|${b}`;
+          if (!groups.has(key)) groups.set(key, { a, b, cells: [] });
+          groups.get(key).cells.push(cell);
+          break;
+        }
+      }
+    }
+    for (const { a, b, cells } of groups.values()) {
+      for (const cell of cells) grid[cell] = BLANK;
+      const lines = `${this.units[a].name} and ${this.units[b].name}`;
+      const why = `${lines} couldn't fit the ${status[a][0] + status[b][0]} star(s) they still need between them (each 2x2 chunk of two neighbouring lines holds at most one star)`;
+      const text = cells.length === 1
+        ? `Chunking: if ${this.name(cells[0])} had a star, ${why}. So it's crossed out.`
+        : `Chunking: a star in any of these ${cells.length} cells means ${why}. So they're all crossed out.`;
+      yield this.step('blank', cells, text, grid, depth, this.units[a].cells.concat(this.units[b].cells), 'chunking');
+    }
+    return groups.size ? 'progress' : 'stuck';
+  }
+
+  /** Can line A get needA stars and line B needB, none touching? */
+  pairCanFit(openA, needA, openB, needB) {
+    if (needA < 0 || needB < 0) return false;
+    for (const combo of combinations(openA, needA)) {
+      if (combinations(combo, 2).some(([x, y]) => this.neighbourSets[x].has(y))) continue;
+      const blocked = new Set();
+      for (const x of combo) this.neighbours[x].forEach(c => blocked.add(c));
+      if (this.canFit(openB.filter(c => !blocked.has(c)), needB)) return true;
+    }
+    return false;
+  }
+
+  /** RULE 5 - FOLLOW THE WHAT-IF ALL THE WAY: a pretend star, then Rules 1-2 on a scratch copy. */
   *ruleDeepLookahead(grid, depth) {
-    let found = false;
+    const groups = new Map();   // dead end -> cells whose pretend star leads to it
     for (let cell = 0; cell < this.n * this.n; cell++) {
       if (grid[cell] !== UNKNOWN) continue;
       const reason = this.tryStarQuietly(grid.slice(), cell);
       if (reason !== null) {
-        grid[cell] = BLANK;
-        const why = reason[0].toLowerCase() + reason.slice(1).replace(/\.+$/, '');
-        yield this.step('blank', [cell], `Pretend ${this.name(cell)} has a star and follow the rules forward: it leads to a dead end (${why}). So it's crossed out.`, grid, depth);
-        found = true;
+        if (!groups.has(reason)) groups.set(reason, []);
+        groups.get(reason).push(cell);
       }
     }
-    return found ? 'progress' : 'stuck';
+    for (const [reason, cells] of groups) {
+      for (const cell of cells) grid[cell] = BLANK;
+      const why = reason[0].toLowerCase() + reason.slice(1).replace(/\.+$/, '');
+      const text = cells.length === 1
+        ? `Pretend ${this.name(cells[0])} has a star and follow the rules forward: it leads to a dead end (${why}). So it's crossed out.`
+        : `Pretend any of these ${cells.length} cells has a star and follow the rules forward: each leads to the same dead end (${why}). So they're all crossed out.`;
+      yield this.step('blank', cells, text, grid, depth, [], 'deep');
+    }
+    return groups.size ? 'progress' : 'stuck';
   }
 
-  /** Helper for Rule 4: returns the sentence explaining the dead end, or null. */
+  /** Helper for Rule 5: returns the sentence explaining the dead end, or null. */
   tryStarQuietly(scratch, cell) {
     if (this.placeStar(scratch, cell) === null) return 'it would touch another star.';
     this.quiet = true;
@@ -325,9 +408,15 @@ class StarBattleSolver {
     }
   }
 
-  /** Apply the rules, cheapest first, until all are stuck. Returns false if the board broke. */
+  /**
+   * Apply the rules, SIMPLEST FIRST (how much of the board a person must keep in mind at once), until all are
+   * stuck: counting, Rude Roommates / Nosy Neighbors, squeezes in 1-2 lines, chunking, squeezes in 3+ lines,
+   * the deep what-if. Returns false if the board broke. (See solver.py's _deduce for the longer explanation.)
+   */
   *deduce(grid, depth) {
-    const rules = [this.ruleCounting, this.ruleSqueeze, this.ruleLookahead];
+    const rules = [this.ruleCounting, this.ruleLookahead, (g, d) => this.ruleSqueeze(g, d, 1, 2)];
+    if (this.chunking) rules.push(this.ruleChunking);
+    rules.push((g, d) => this.ruleSqueeze(g, d, 3));
     if (this.deepLookahead) rules.push(this.ruleDeepLookahead);
     for (;;) {
       let progressed = false;
@@ -376,14 +465,14 @@ class StarBattleSolver {
       this.guesses++;
       const trial = grid.slice();
       this.placeStar(trial, cell);
-      yield this.step('guess', [cell], `Stuck - trying a star at ${this.name(cell)} as a guess (guess level ${depth + 1}).`, trial, depth + 1);
+      yield this.step('guess', [cell], `Stuck - trying a star at ${this.name(cell)} as a guess (guess level ${depth + 1}).`, trial, depth + 1, [], 'guess');
 
       const done = yield* this.search(trial, depth + 1, maxSolutions);
       if (done) return true;
 
       this.backtracks++;
       grid[cell] = BLANK;
-      yield this.step('backtrack', [cell], `Undoing the guess: a star at ${this.name(cell)} leads nowhere, so that cell must be blank.`, grid, depth);
+      yield this.step('backtrack', [cell], `Undoing the guess: a star at ${this.name(cell)} leads nowhere, so that cell must be blank.`, grid, depth, [], 'backtrack');
     }
   }
 
@@ -419,6 +508,16 @@ class StarBattleSolver {
 }
 
 function range(n) { return Array.from({ length: n }, (_, i) => i); }
+
+/** Every way to choose k items from a list, in order (like Python's itertools.combinations). */
+function combinations(list, k) {
+  if (k === 0) return [[]];
+  const out = [];
+  for (let i = 0; i <= list.length - k; i++) {
+    for (const rest of combinations(list.slice(i + 1), k - 1)) out.push([list[i], ...rest]);
+  }
+  return out;
+}
 
 /** Read a puzzle from text: one row per line, '#' lines are comments, spaces ignored. */
 function parsePuzzle(text) {

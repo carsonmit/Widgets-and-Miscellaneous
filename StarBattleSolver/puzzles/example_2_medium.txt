@@ -1,13 +1,13 @@
-# Medium - no guessing, but the solver has to follow a what-if through several moves (Rule 4).
+# Medium - needs a squeeze across two rows (No More Space / Too Much Space) or chunking.
 # 10x10, 2 stars per row / column / region.
 # Each letter is the region that cell belongs to.
-CCCCGGGGEE
-CCCCGJGGEE
-CCCCGJJJJE
-CCCCGGAJJE
-CCCAAAAABE
-HHFAAAAABB
-HHFFFFFBBB
-HHIIDDIIBB
-HIIDDDIIBB
-HIIIIIIIII
+HHHHGGGJJJ
+HCHHGGGIII
+CCHCGGGIII
+CCCCGGGIII
+CCCCGGGEII
+FFFDDGGEII
+FDDDDDEEBI
+ADADDDBEBI
+AAAABBBBBB
+AAAAAABBBB

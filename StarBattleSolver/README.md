@@ -80,10 +80,11 @@ Answer** or **Several Answers**. Regions split into separate pieces are allowed,
 | **Reset** | Removes the stars and crosses. (Painting a cell does this automatically.) |
 | **Pause between steps** | From none to 1.5 seconds. |
 
-**Reading the board:** ★ is a star and × is a cell that can't hold one. A **plum box** marks the cells the latest
-step changed, a **gold box** the cell being guessed, and a **red box** a dead end. **Guess level** is how many guesses
+**Reading the board:** ★ is a star and × is a cell that can't hold one. The row, column or region a step's reasoning
+is about is **tinted plum**. A **plum box** marks the cells the latest step changed, a **gold box** the cell being guessed, and a **red box** a dead end. **Guess level** is how many guesses
 deep the solver currently is: 0 means everything on the board was proven by logic. **Every Step** lists each step
-with its reason: guesses in gold, dead ends in red.
+with its reason: guesses in gold, dead ends in red. Cells crossed out for the same reason (the same rule, about the
+same row, column or region) are one step, the way you'd write it down by hand.
 
 The solving, grading and puzzle-making happen in a helper that works in the background (`worker.js`), so the page
 never freezes. If a strange home-made puzzle takes longer than 30 seconds to solve, the app stops and says so.
@@ -95,24 +96,29 @@ never freezes. If a strange home-made puzzle takes longer than 30 seconds to sol
 
 ## Difficulty levels
 
-A puzzle's difficulty is decided by watching the solver, which always tries its simplest rule first and only reaches
-for a harder one when every simpler rule is stuck (the rules are explained [below](#the-four-rules)):
+A puzzle's level is the **widest reasoning it needs**: how much of the board you have to keep in mind at once. The
+solver always tries the simplest reasoning first (see [the order of the rules](#the-order-of-the-rules)), so the
+hardest rule it ever uses on the way to the answer is the hardest one the puzzle really needs.
 
-| Level | What the solver needs | Share of random puzzles |
+| Level | The widest reasoning it needs | Share of random puzzles |
 |---|---|---|
-| **Easy** | Rules 1–3 only (counting, squeeze, quick what-if). No guessing. | about 27% |
-| **Medium** | Rule 4 (deep what-if) at least once. No guessing. | about 47% |
-| **Hard** | All four rules get stuck, so it has to guess, but never more than one guess at a time. | about 17% |
-| **Expert** | It has to guess while already inside a guess (guess level 2 or more). | about 8% |
+| **Easy** | One or two rows, columns or regions at a time: Completed Sections, Rude Roommates, Nosy Neighbors, a squeeze inside one row or column | about 15% |
+| **Medium** | Two or more lines together: chunking, or No More Space / Too Much Space across 2 or more rows or columns | about 20% |
+| **Hard** | A chain of what-ifs (Rule 5), but no guessing | about 41% |
+| **Expert** | Logic alone gets stuck, so the solver has to guess (trial and error) | about 24% |
 
-The shares come from 300 random puzzles. The solver takes the same steps every time on the same puzzle, so a
-puzzle's grade never changes, and `gradePuzzle()` in `generator.js` can grade any puzzle, including ones you paint.
-**Random Puzzle** keeps making puzzles and grading them until one has the level you picked, so the puzzle you get
-really is that level. That's why Expert takes longest: on a computer usually a few seconds, sometimes up to half a
-minute on a phone. The tests check that the examples and random puzzles have the levels they claim.
+The shares come from 300 random puzzles. A contest like the Berkeley mini Math Tournament only uses puzzles that logic
+alone can solve, so Expert puzzles are beyond what a contest would ask. Hovering over the level in the app shows the
+hardest rule the puzzle needed.
 
-The grades describe what *this solver* needs. A person may know shortcuts the solver doesn't (see
-[Limitations](#limitations-and-ideas-for-improvement)), so a "Hard" puzzle may feel easier to an expert player.
+The solver takes the same steps every time on the same puzzle, so a puzzle's grade never changes, and `gradePuzzle()`
+in `generator.js` can grade any puzzle, including ones you paint. **Random Puzzle** keeps making puzzles and grading
+them until one has the level you picked, so the puzzle you get really is that level. Easy is the rarest, so it takes
+longest: about 4 seconds on a laptop on average, sometimes 10 or more on a phone. The tests check that the examples and
+random puzzles have the levels they claim.
+
+The grades describe what *this solver* needs. An experienced player may know other shortcuts, so a puzzle may feel
+easier than its label.
 
 ## Puzzle file format
 
@@ -200,7 +206,7 @@ Every cell is always **unknown**, **star** or **blank** (definitely no star). Th
 ```
           ┌──────────────────────────────────────────────┐
           ▼                                              │
-  1. LOGIC: apply Rules 1-4 until none of them helps     │
+  1. LOGIC: apply Rules 1-5 until none of them helps     │
           │                                              │
           ├── board broke? ──► this branch is wrong      │
           ├── board full?  ──► SOLVED                    │
@@ -216,40 +222,66 @@ Every cell is always **unknown**, **star** or **blank** (definitely no star). Th
 Computer scientists call this **constraint propagation with backtracking search**. The rules (constraint
 propagation) do almost all of the work, so very few guesses are needed.
 
-### The four rules
+### The five rules
 
-A **unit** means any row, column or region. Each needs exactly 2 stars.
+A **unit** means any row, column or region. Each needs exactly 2 stars. Rules 1–4 are the ones in Carson's instruction
+manual for the Star Battles round of the 2022 Berkeley mini Math Tournament (BmMT), and the explanations use the
+manual's names for them.
 
 **Rule 1: Counting.** For every unit:
-- if it already has its 2 stars, cross out the rest of it;
+- **Completed Sections:** if it already has its 2 stars, cross out the rest of it (the same goes for rows and columns);
 - if the number of open cells equals the number of stars it still needs, they're all stars;
 - if it can't possibly fit the stars it needs without them touching, the board is broken.
 
 Every time a star is placed, its 8 neighbors are crossed out, because stars can't touch.
 
-**Rule 2: Squeeze (pigeonhole).** Take a band of, say, 3 neighboring rows. It holds exactly 3 × 2 = 6 stars.
-- If 3 regions lie **entirely inside** the band, they need all 6 of those stars, so every band cell belonging to any
-  other region is crossed out.
-- If only 3 regions **touch** the band at all, the band's 6 stars must come from them, which fills them up. So their
-  cells **outside** the band are crossed out.
+**Rule 2: No More Space and Too Much Space (a squeeze).** Take a band of, say, 3 neighboring rows. It holds exactly
+3 × 2 = 6 stars.
+- **No More Space:** if 3 regions lie **entirely inside** the band, they need all 6 of those stars, so every band cell
+  belonging to any other region is crossed out.
+- **Too Much Space:** if only 3 regions **touch** the band at all, the band's 6 stars must come from them, which fills
+  them up. So their cells **outside** the band are crossed out.
 
-This is checked for every band of rows and every band of columns, of every width.
+This is checked for every band of rows and every band of columns, narrowest first.
 
-**Rule 3: Quick what-if.** For each open cell, imagine a star there for a moment. It would cross out its neighbors,
-and it might complete its row, column or region. Would some unit then be left without room for its stars? If so, the
-star can't go there, so the cell gets crossed out.
+**Rule 3: Rude Roommates and Nosy Neighbors (a quick what-if).** For each open cell, imagine a star there for a moment.
+It would cross out its neighbors, and it might complete its row, column or region. Would some unit then be left
+without room for its stars? If so, the star can't go there, so the cell is crossed out. If the unit left without room
+is the cell's own, that's **Rude Roommates** (the star leaves no room for its roommate); if it's another one nearby,
+that's **Nosy Neighbors**.
 
-**Rule 4: Deep what-if.** Like Rule 3, but the solver follows the consequences further. On a scratch copy of the
+**Rule 4: Chunking.** Any 2×2 square holds at most one star, because any two of its cells touch. So two neighboring
+rows (or columns) can hold at most one star per 2×2 "chunk" of them. For each open cell, the solver imagines a star
+there and checks every pair of neighboring rows and columns: could both lines still get the stars they need? If not,
+the cell is crossed out. (The solver checks this exactly; chunking is how a person sees it at a glance.)
+
+**Rule 5: Deep what-if.** Like Rule 3, but the solver follows the consequences further. On a scratch copy of the
 board, it places the pretend star and keeps applying Rules 1 and 2 like falling dominoes. If that chain reaction ends
 in something impossible, the cell gets crossed out on the real board. The scratch work isn't shown, only the
-conclusion. This is the rule that keeps the number of real guesses so low.
+conclusion.
 
-Rules are tried cheapest first. Whenever one makes progress, the solver goes back to Rule 1, because new information
-often unlocks the simple rules again.
+**One step per reason.** All the cells crossed out by the same rule for the same reason (the same unit left without
+room, the same pair of lines, the same dead end) are shown as one step, and the unit the reason is about is tinted on
+the board.
+
+### The order of the rules
+
+The solver always tries the **simplest reasoning first**, where "simplest" means how much of the board you have to
+keep in mind at once:
+
+1. Counting (one unit)
+2. Rude Roommates and Nosy Neighbors (one or two units)
+3. Squeezes in 1 or 2 rows or columns
+4. Chunking (two lines together)
+5. Squeezes in 3 or more rows or columns
+6. The deep what-if (a whole chain of moves)
+
+Whenever a rule makes progress, it starts again from the top, because new information often unlocks the simple
+rules. This keeps the explanations as simple as possible, and it's what makes the difficulty grades honest.
 
 ### Choosing a good guess
 
-When all four rules are stuck, the solver:
+When all five rules are stuck, the solver:
 
 1. finds the unit with the **fewest ways** left to place its remaining stars (for example, "needs 1 star and has only
    2 open cells" means just 2 ways), and
@@ -261,18 +293,20 @@ A guess like that either succeeds or fails quickly. Failing still helps, because
 
 `solveSteps()` (in Python, `solve_steps()`) is a **generator**: a function that can pause partway through. Each time
 the solver does something worth showing, it hands back a step containing the action type, the cells involved, a
-plain-English message, a snapshot of the whole board, and the current guess level. The app collects these steps in the
-background and then plays them back at the speed you choose. The solver doesn't know anything about the page, and the
-page doesn't need to know how the solver thinks.
+plain-English message, a snapshot of the whole board, the current guess level, the unit the reasoning is about, and
+which rule made it. The app collects these steps in the background and then plays them back at the speed you choose.
+The solver doesn't know anything about the page, and the page doesn't need to know how the solver thinks.
 
 ### Why it's efficient
 
-- **The rules do the work.** About three quarters of random puzzles need no guesses at all.
+- **The rules do the work.** About three quarters of random puzzles need no guesses at all. Adding chunking and
+  grouping the steps cut the average number of steps per puzzle from 90 to about 60, and the deep what-if steps by
+  two thirds.
 - **Smart guesses.** Guessing in the most constrained place keeps the search tiny.
 - **Cheap bookkeeping.** Cells are numbered 0–99 in one flat list, so copying the board for a guess is quick. Each
   cell's neighbors and units are worked out once at the start. Rule 2 stores which rows and columns each region touches
   as a *bitmask* (a whole number used as a row of on/off switches), so it can compare whole sets in one operation.
-- **Skipping needless work.** Rule 3 only re-checks the units an imaginary star would actually affect, and Rule 4
+- **Skipping needless work.** Rules 3 and 4 only re-check the units an imaginary star would actually affect, and Rule 5
   skips board snapshots during its silent scratch work.
 
 ## How random puzzles are made
@@ -289,8 +323,8 @@ page doesn't need to know how the solver thinks.
    Repeat until only one answer remains.
 5. **Grade it** (see [Difficulty levels](#difficulty-levels)) and keep it only if it has the level you asked for.
 
-One puzzle takes about a third of a second on a laptop. The generator checks for a second answer without Rule 4,
-because it solves many throwaway puzzles and only needs speed there.
+One puzzle takes about a third of a second on a laptop. The generator checks for a second answer without Rules 4 and
+5, because it solves many throwaway puzzles and only needs speed there.
 
 ## Files in this folder
 
@@ -340,7 +374,7 @@ The tests check that:
 - the app's random puzzles have the difficulty asked for, with exactly one answer.
 
 The last three need [Node.js](https://nodejs.org) (a program that runs JavaScript outside a browser) and are skipped
-without it. All answers are double-checked by `check_solution()`, which tests the four rules independently of the solver.
+without it. All answers are double-checked by `check_solution()`, which tests the puzzle's four rules independently of the solver.
 
 ## Troubleshooting
 
@@ -349,17 +383,22 @@ without it. All answers are double-checked by `check_solution()`, which tests th
 | **Solve** does nothing and a red line appears under the swatches | The puzzle isn't finished: the line says what's missing (unpainted cells, the wrong number of regions...). |
 | "No Answer" | Usually a painting mistake. Compare each region's outline with the original puzzle. |
 | "Several Answers" | Also usually a painting mistake; the solver will still show one of the answers. |
-| An Expert puzzle takes a long time | It's searching for a puzzle that really is Expert, which only about 1 in 12 random puzzles is. Wait, or press **Cancel**. |
+| An Easy puzzle takes a while | It's searching for a puzzle that really is Easy, which only about 1 in 7 random puzzles is. Wait, or press **Cancel**. |
 | Right-click doesn't erase on a Mac | Use a two-finger click, or the eraser swatch. |
 | `python` isn't recognized | Try `python3`, or on Windows `py`. |
 
 ## Limitations and ideas for improvement
 
 - **The app is fixed at 10×10.** The solvers and generators work for any size; the app would need a size selector.
-- **Rule 4 isn't how humans usually think.** Its "follow the dominoes" reasoning is valid, but it can chain several
+- **Rule 5 isn't how humans usually think.** Its "follow the dominoes" reasoning is valid, but it can chain several
   steps together that a person would write out one at a time. Each message names the dead end it found, so you can
   check the reasoning yourself.
-- **More human techniques** could be added as named rules, which would also make the difficulty levels closer to how
-  people experience them. One example is the 2×2 block rule: every 2×2 square holds at most one star, and tiling an
-  area with such squares gives an upper limit on how many stars that area can hold.
+- **More human techniques** could be added as named rules, which would make the difficulty levels even closer to how
+  people experience them. For example, chunking could also be used across three or more lines, or within a single
+  large region.
 - **The Python version can't grade difficulty.** Grading lives in `generator.js`; it could be translated back.
+- **Planned: the harder variants** from Carson's instruction manual for the Star Battles round of the 2022 Berkeley
+  mini Math Tournament (BmMT): puzzles with any number of stars per row, column and section; Double Section puzzles
+  (half as many sections, each needing twice the stars); Row, Column, Section puzzles (rectangular grids with
+  separate star counts for rows, columns and sections); and Black Hole, White Dwarf puzzles (two kinds of star with
+  different "no touching" rules).

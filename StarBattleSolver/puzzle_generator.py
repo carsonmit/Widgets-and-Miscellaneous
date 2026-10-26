@@ -176,8 +176,8 @@ def _make_unique(regions, secret, stars, rng, max_rounds=60):
     owner = [[LETTERS.index(ch) for ch in row] for row in regions]
     for _ in range(max_rounds):
         current = ["".join(LETTERS[k] for k in row) for row in owner]
-        # deep_lookahead=False: faster for the many quick checks we do here.
-        solver = StarBattleSolver(current, stars, deep_lookahead=False)
+        # Rules 4 and 5 off: faster for the many quick checks we do here.
+        solver = StarBattleSolver(current, stars, deep_lookahead=False, chunking=False)
         if solver.count_solutions(limit=2) == 1:
             return current                       # unique - finished!
         # Find an answer that isn't our secret one.
